@@ -10,13 +10,13 @@ title: "ldjam55"
 - Periodically do battle (auto battler, simple, summonings usually win or fight against other summon)
 
 # Game Mechanics
-- Procedurally generated map
-- Send out expeditions
-- Protect expeditions
-- Protect tower
-- Auto battler
-- Exploration
+[x] Procedurally generated map
+[ ] Send out expeditions
+[ ] Protect expeditions
+[ ] Protect tower
+[ ] Auto battler
+[ ] Exploration
 
 # TODO
-- Make rng seed and map seed separate so that map can be predictable at least...
-- Others things we want predictable can be an addition to the seed and a hash as a shortcut...
+[x] Make rng seed and map seed separate so that map can be predictable at least...
+[x] Others things we want predictable can be an addition to the seed and a hash as a shortcut...

@@ -28,10 +28,15 @@ pub struct MapFogOfWar;
 #[derive(Component)]
 pub struct PlayerTower;
 
+#[derive(Resource)]
+pub struct TreasureLocs {
+    pub locs: Vec<(u32, u32)>,
+}
+
 #[derive(Resource, Default)]
 pub struct GameState {
-    pub player_tower_location: (u64, u64),
-    pub enemy_tower_locations: Vec<(u64, u64)>,
+    pub player_tower_location: (u32, u32),
+    pub enemy_tower_locations: Vec<(u32, u32)>,
     pub map: NoiseMap,
 }
 

@@ -4,9 +4,10 @@ use bevy_prng::WyRand;
 use bevy_rand::prelude::*;
 use noise::utils::{NoiseMap, NoiseMapBuilder, PlaneMapBuilder};
 use noise::{Fbm, Perlin, Value};
-use rand::Rng;
+use rand::{Rng, SeedableRng};
+use xxhash_rust::xxh3::xxh3_64;
 
-use crate::{GameAssets, GameConfig, GameState, MapFogOfWar, MapGround, MapStuff, PlayerTower};
+use crate::*;
 
 pub struct MapGenerationPlugin;
 
@@ -30,13 +31,13 @@ fn center_camera_on_player_tower(
     state: Res<GameState>,
     mut query: Query<&mut Transform, With<Camera>>,
     mut q2: Query<&TilePos, (With<PlayerTower>, Without<Camera>)>,
-    ) {
+) {
     let player_tower_tilepos = q2.single();
     let mut camera_transform = query.single_mut();
 
     // Map is centered at 0, 0 and size is 1000, 1000
     // tile sizes are 32x32
-    
+
     let player_tower_x = player_tower_tilepos.x;
     let player_tower_y = player_tower_tilepos.y;
 
@@ -86,7 +87,7 @@ fn spawn_player_tower(
             if let Some(tile_entity) = tile_entity {
                 commands.entity(tile_entity).despawn();
             }
-        }   
+        }
     }
 }
 
@@ -182,13 +183,59 @@ fn draw_map(mut commands: Commands, assets: Res<GameAssets>, state: Res<GameStat
 fn create_map(seed: u32) -> NoiseMap {
     let fbm = Fbm::<Value>::new(seed);
 
-    let noise_map = PlaneMapBuilder::new(fbm)
+    let mut noise_map = PlaneMapBuilder::new(fbm)
         .set_size(1000, 1000)
         .set_x_bounds(-1.0, 1.0)
         .set_y_bounds(-1.0, 1.0)
         .build();
 
+    // Get average value
+    let mut sum = 0.0;
+    for x in 0..1000 {
+        for y in 0..1000 {
+            sum += noise_map.get_value(x, y);
+        }
+    }
+    let avg = sum / 1_000_000.0;
+    log::info!("Average value: {}", avg);
+
+    // Average value should be between 0.3 and 0.7
+    // Scale the map so that the average value is 0.5
+    if avg < 0.3 || avg > 0.7 {
+        let diff = 0.5 - avg;
+
+        for x in 0..1000 {
+            for y in 0..1000 {
+                let val = noise_map.get_value(x, y);
+                noise_map.set_value(x, y, val + diff);
+            }
+        }
+    }
+
+    // Min and max should be between 0 and 1
+    
+    // f64 so have to use fold
+    let max = noise_map.iter().fold(f64::MIN, |acc, x| acc.max(*x));
+    let min = noise_map.iter().fold(f64::MAX, |acc, x| acc.min(*x));
+    log::info!("Min: {}, Max: {}", min, max);
+
+    if min < 0.0 || max > 1.0 {
+        for x in 0..1000 {
+            for y in 0..1000 {
+                let val = noise_map.get_value(x, y);
+                if val < 0.0 || val > 1.0 {
+                    noise_map.set_value(x, y, sigmoid(val));
+                }
+            }
+        }
+    }
+
     noise_map
+}
+
+// Hacky, from ml world, but whatev
+fn sigmoid(x: f64) -> f64 {
+    1.0 / (1.0 + (-x).exp())
 }
 
 fn simulate_rainfall_river_generation_erosion(
@@ -308,36 +355,17 @@ fn get_index(val: f64) -> u32 {
     }
 }
 
-fn get_color(val: f64) -> Color {
-    let color_result = match val.abs() {
-        // Dark blue water
-        v if v < 0.03 => Color::hex("#0000ff"),
-        // Light blue water
-        v if v < 0.08 => Color::hex("#00aaff"),
-        v if v < 0.1 => Color::hex("#0a7e0a"),
-        v if v < 0.2 => Color::hex("#0da50d"),
-        v if v < 0.3 => Color::hex("#10cb10"),
-        v if v < 0.4 => Color::hex("#18ed18"),
-        v if v < 0.5 => Color::hex("#3ff03f"),
-        v if v < 0.6 => Color::hex("#65f365"),
-        v if v < 0.7 => Color::hex("#8cf68c"),
-        // Mountains (guessing)
-        v if v < 0.8 => Color::hex("#b2f9b2"),
-        v if v < 0.9 => Color::hex("#d9fcd9"),
-        v if v <= 1.0 => Color::hex("#ffffff"),
-        _ => panic!("Unexpected value for color"),
-    };
-    color_result.unwrap()
-}
 
-fn create_treasure_spots(rng: &mut GlobalEntropy<WyRand>) -> Vec<(usize, usize)> {
+fn create_treasure_spots(seed: u32) -> Vec<(u32, u32)> {
     let mut locs = Vec::new();
+
+    let mut rng = WyRand::seed_from_u64(seed as u64);
 
     // Generate between 200 and 500 treasure spots
     let num_treasure_spots = rng.gen_range(200..500);
     for _ in 0..num_treasure_spots {
-        let x = rng.gen_range(0..1000);
-        let y = rng.gen_range(0..1000);
+        let x: u32 = rng.gen_range(0..1000);
+        let y: u32 = rng.gen_range(0..1000);
         locs.push((x, y));
     }
 
@@ -347,18 +375,25 @@ fn create_treasure_spots(rng: &mut GlobalEntropy<WyRand>) -> Vec<(usize, usize)>
 #[derive(Resource, Deref)]
 struct Root(Entity);
 
-fn generate_world(mut rng: ResMut<GlobalEntropy<WyRand>>, mut gamestate: ResMut<GameState>) {
-    let map = create_map(rng.gen::<u32>());
-    let map = simulate_rainfall_river_generation_erosion(map, 10, 0.01);
+fn generate_world(
+    mut commands: Commands,
+    mut gamestate: ResMut<GameState>,
+    config: Res<GameConfig>,
+) {
+    let map = create_map(config.seed);
+    let map = simulate_rainfall_river_generation_erosion(map, 2, 0.01);
 
-    let treasure_spots = create_treasure_spots(&mut *rng);
-    log::info!("Treasure spots: {:?}", treasure_spots.len());
+    let treasure_spots = create_treasure_spots(config.seed);
+    commands.insert_resource(TreasureLocs { locs: treasure_spots });
 
     gamestate.map = map;
+    log::info!("World generated");
 }
 
-fn place_towers(mut res: ResMut<GameState>, mut rng: ResMut<GlobalEntropy<WyRand>>) {
-    let mut player_loc: (u64, u64);
+fn place_towers(mut res: ResMut<GameState>, config: Res<GameConfig>) {
+    let mut rng = WyRand::seed_from_u64(xxh3_64(&config.seed.to_le_bytes()[..]));
+    
+    let mut player_loc: (u32, u32);
     // Find a location that is within 200,200 and 800,800 (so not the edge of the map)
     player_loc = (rng.gen_range(200..800), rng.gen_range(200..800));
     loop {
@@ -372,13 +407,15 @@ fn place_towers(mut res: ResMut<GameState>, mut rng: ResMut<GlobalEntropy<WyRand
         player_loc = (rng.gen_range(200..800), rng.gen_range(200..800));
     }
 
+    log::info!("Player Tower Location: {:?}", player_loc);
+
     res.player_tower_location = player_loc;
 
     // Place between 10 and 20 enemy towers
 
     let num_enemy_towers = rng.gen_range(10..20);
     for _ in 0..num_enemy_towers {
-        let mut enemy_loc: (u64, u64);
+        let mut enemy_loc: (u32, u32);
         enemy_loc = (rng.gen_range(100..900), rng.gen_range(100..900));
         loop {
             let val = res
@@ -391,4 +428,6 @@ fn place_towers(mut res: ResMut<GameState>, mut rng: ResMut<GlobalEntropy<WyRand
         }
         res.enemy_tower_locations.push(enemy_loc);
     }
+
+    log::info!("Towers Placed");
 }
