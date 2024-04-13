@@ -1,6 +1,11 @@
 use bevy::prelude::*;
-use noise::{Fbm, Perlin};
-use noise::utils::{NoiseMapBuilder, PlaneMapBuilder, NoiseMap};
+use bevy_rand::prelude::*;
+use bevy_prng::Xoroshiro64StarStar;
+use noise::utils::{NoiseMap, NoiseMapBuilder, PlaneMapBuilder};
+use noise::{Fbm, Perlin, Value};
+use rand::Rng;
+
+use crate::GameConfig;
 
 pub struct MapGenerationPlugin;
 
@@ -11,18 +16,22 @@ impl Plugin for MapGenerationPlugin {
 }
 
 fn create_map(seed: u32) -> NoiseMap {
-    let fbm = Fbm::<Perlin>::new(seed);
+    let fbm = Fbm::<Value>::new(seed);
 
     let noise_map = PlaneMapBuilder::new(fbm)
-            .set_size(1000, 1000)
-            .set_x_bounds(-1.0, 1.0)
-            .set_y_bounds(-1.0, 1.0)
-            .build();
+        .set_size(1000, 1000)
+        .set_x_bounds(-1.0, 1.0)
+        .set_y_bounds(-1.0, 1.0)
+        .build();
 
     noise_map
 }
 
-fn simulate_rainfall_river_generation_erosion(mut map: NoiseMap, iterations: usize, rainfall_amount: f64) -> NoiseMap {
+fn simulate_rainfall_river_generation_erosion(
+    mut map: NoiseMap,
+    iterations: usize,
+    rainfall_amount: f64,
+) -> NoiseMap {
     let map_size = map.size();
     let width = map_size.0;
     let height = map_size.1;
@@ -112,33 +121,6 @@ fn simulate_rainfall_river_generation_erosion(mut map: NoiseMap, iterations: usi
 
     map
 }
-    
-
-
-// Set to maximum height of 5.0
-pub fn circular_border_mountain_range(mut map: NoiseMap) -> NoiseMap {
-    let map_size = map.size();
-    let width = map_size.0;
-    let height = map_size.1;
-
-    let center_x = width as f64 / 2.0;
-    let center_y = height as f64 / 2.0;
-
-    for x in 0..width {
-        for y in 0..height {
-            let distance = ((x as f64 - center_x).powi(2) + (y as f64 - center_y).powi(2)).sqrt();
-            let val = map.get_value(x, y);
-            let new_val = val + (1.0 - distance / 100.0);
-            // Clamp to -5., 5.
-            let new_val = new_val.min(1.0);
-            let new_val = new_val.max(-1.0);
-            // println!("{}:{} {} -> {}", x, y, val, new_val);
-            map.set_value(x, y, new_val);
-        }
-    }
-
-    map
-}
 
 fn get_color(val: f64) -> Color {
     let color_result = match val.abs() {
@@ -156,20 +138,35 @@ fn get_color(val: f64) -> Color {
         v if v < 0.8 => Color::hex("#b2f9b2"),
         v if v < 0.9 => Color::hex("#d9fcd9"),
         v if v <= 1.0 => Color::hex("#ffffff"),
-        _ => panic!("Unexpected value for color")
+        _ => panic!("Unexpected value for color"),
     };
     color_result.expect("Getting color from HEX error")
+}
+
+fn create_treasure_spots(rng: &mut GlobalEntropy<Xoroshiro64StarStar>) -> Vec<(usize, usize)> {
+    let mut locs = Vec::new();
+
+    // Generate between 200 and 500 treasure spots
+    let num_treasure_spots = rng.gen_range(200..500);
+    for _ in 0..num_treasure_spots {
+        let x = rng.gen_range(0..1000);
+        let y = rng.gen_range(0..1000);
+        locs.push((x, y));
+    }
+
+    locs
 }
 
 #[derive(Resource, Deref)]
 struct Root(Entity);
 
-fn generate_world(
-    mut commands: Commands,
-) {
-    let map = create_map(89432234);
-    // let map = circular_border_mountain_range(map);
-    let map = simulate_rainfall_river_generation_erosion(map, 5, 0.01);
+fn generate_world(mut commands: Commands, mut rng: ResMut<GlobalEntropy<Xoroshiro64StarStar>>) {
+    let map = create_map(rng.gen::<u32>());
+    let map = simulate_rainfall_river_generation_erosion(map, 10, 0.01);
+
+    let treasure_spots = create_treasure_spots(&mut *rng);
+    log::info!("Treasure spots: {:?}", treasure_spots.len());
+   
 
     let (grid_width, grid_height) = map.size();
     debug!("Map size: {}x{}", grid_width, grid_height);
@@ -179,29 +176,36 @@ fn generate_world(
     let start_x = -(grid_width as f32) * tile_size / 2.0;
     let start_y = -(grid_height as f32) * tile_size / 2.0;
 
-    let root = commands.spawn(
-        SpatialBundle::default()
-    ).with_children(|parent| {
-        for col_x in 0..grid_width {
-            for col_y in 0..grid_height {
-                let val = map.get_value(col_x, col_y);
-                let x = start_x + col_x as f32 * tile_size;
-                let y = start_y + col_y as f32 * tile_size;
+    let root = commands
+        .spawn(SpatialBundle::default())
+        .with_children(|parent| {
+            for col_x in 0..grid_width {
+                for col_y in 0..grid_height {
+                    let val = map.get_value(col_x, col_y);
+                    let x = start_x + col_x as f32 * tile_size;
+                    let y = start_y + col_y as f32 * tile_size;
 
-                parent.spawn(
-                    SpriteBundle {
+                    let mut color = get_color(val);
+
+                    // Check if this is a treasure spot
+                    // For debugging!
+                    if treasure_spots.iter().any(|(tx, ty)| *tx == col_x && *ty == col_y) {
+                        color = Color::hex("#ff0000").expect("Getting color from HEX error");
+                    }
+
+                    parent.spawn(SpriteBundle {
                         sprite: Sprite {
-                            color: get_color(val),
+                            color: color,
                             custom_size: Some(Vec2::new(tile_size, tile_size)),
                             ..default()
                         },
                         transform: Transform::from_translation(Vec3::new(x, y, 0.)),
                         ..default()
-                    }
-                );
+                    });
+                }
             }
-        }
-    }).id();
+        })
+        .id();
 
     commands.insert_resource(Root(root));
 }

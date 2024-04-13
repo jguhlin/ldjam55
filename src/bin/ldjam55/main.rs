@@ -1,12 +1,12 @@
+use bevy::asset::AssetMetaCheck;
 use bevy::prelude::*;
+use bevy::window::PrimaryWindow;
+use bevy::winit::WinitWindows;
 use bevy_egui::{egui, EguiContexts, EguiPlugin, EguiSettings};
 use bevy_inspector_egui::quick::WorldInspectorPlugin;
 use bevy_mod_picking::prelude::*;
-use bevy_prng::ChaCha8Rng;
+use bevy_prng::Xoroshiro64StarStar;
 use bevy_rand::prelude::*;
-use bevy::asset::AssetMetaCheck;
-use bevy::window::PrimaryWindow;
-use bevy::winit::WinitWindows;
 
 #[cfg(debug_assertions)]
 use bevy::diagnostic::{FrameTimeDiagnosticsPlugin, LogDiagnosticsPlugin};
@@ -17,12 +17,17 @@ fn main() {
     let mut app = App::new();
     // .add_plugins(DefaultPlugins.set(low_latency_window_plugin()))
     // Normally MSAA 4 but from the template (for web? I suspect) we turn it off
-    app.insert_resource(Msaa::Off)
+    app
+        // Resources
+        .insert_resource(Msaa::Off)
+        .insert_resource(GameConfig::default())
         .insert_resource(AssetMetaCheck::Never)
         .insert_resource(ClearColor(Color::rgb(0.4, 0.4, 0.4)))
+
+        // Plugins
         .add_plugins(DefaultPlugins.set(WindowPlugin {
             primary_window: Some(Window {
-                title: "Bevy game".to_string(), // ToDo
+                title: "ldjam55".to_string(), // ToDo
                 // Bind to canvas included in `index.html`
                 canvas: Some("#bevy".to_owned()), // From the web template, hopefully this fixes it!
                 // Tells wasm not to override default event handling, like F5 and Ctrl+R
@@ -31,14 +36,22 @@ fn main() {
             }),
             ..default()
         }))
-        // Default plugin
-        .add_systems(Startup, setup)
-        .add_plugins(MapGenerationPlugin)
+        .add_plugins(EntropyPlugin::<Xoroshiro64StarStar>::default())
+
+        // States
         .init_state::<GameState>()
-        .add_systems(PreUpdate, camera_control);
+
+        // Systems
+        .add_systems(Startup, setup)
+        .add_systems(PreUpdate, camera_control)
+        
+        // Game plugins
+        ;
 
     #[cfg(debug_assertions)]
-    app.add_plugins((FrameTimeDiagnosticsPlugin, LogDiagnosticsPlugin::default()));
+    app
+        .add_plugins((FrameTimeDiagnosticsPlugin, LogDiagnosticsPlugin::default()))
+        .add_plugins(MapGenerationPlugin);
 
     // Enable only for development
     #[cfg(debug_assertions)]
@@ -64,7 +77,7 @@ pub enum GameState {
     Paused,
 }
 
-fn setup(mut commands: Commands) {
+fn setup(mut commands: Commands, config: Res<GameConfig>, mut rng: ResMut<GlobalEntropy<Xoroshiro64StarStar>>) {
     commands.spawn(PointLightBundle {
         point_light: PointLight {
             intensity: 9000.0,
@@ -77,6 +90,12 @@ fn setup(mut commands: Commands) {
     });
 
     commands.spawn(Camera2dBundle::default());
+    // Take u32 twice and convert to u64 from config.seed
+    // Using mem::transmute to convert u32 to u64
+    let seed: [u32; 2] = [config.seed; 2];
+    let seed: [u8;  8] = unsafe { std::mem::transmute(seed) };
+
+    rng.reseed(seed);
 }
 
 fn camera_control(
