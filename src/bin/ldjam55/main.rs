@@ -8,7 +8,6 @@ use bevy::asset::AssetMetaCheck;
 use bevy::window::PrimaryWindow;
 use bevy::winit::WinitWindows;
 
-
 #[cfg(debug_assertions)]
 use bevy::diagnostic::{FrameTimeDiagnosticsPlugin, LogDiagnosticsPlugin};
 
@@ -35,6 +34,7 @@ fn main() {
         // Default plugin
         .add_systems(Startup, setup)
         .add_plugins(MapGenerationPlugin)
+        .init_state::<GameState>()
         .add_systems(PreUpdate, camera_control);
 
     #[cfg(debug_assertions)]
@@ -52,6 +52,16 @@ fn main() {
     }
 
     app.run();
+}
+
+#[derive(States, Default, Debug, Clone, PartialEq, Eq, Hash)]
+pub enum GameState {
+    #[default]
+    MapGeneration,
+    Loading, // Here, but dunno if we need it
+    Playing,
+    Menu,
+    Paused,
 }
 
 fn setup(mut commands: Commands) {
@@ -72,9 +82,9 @@ fn setup(mut commands: Commands) {
 fn camera_control(
     time: Res<Time>,
     keyboard_input: Res<ButtonInput<KeyCode>>,
-    mut query: Query<(&mut Transform, &mut Camera)>,
+    mut query: Query<&mut Transform, With<Camera>>,
 ) {
-    for (mut transform, mut camera) in query.iter_mut() {
+    for mut transform in query.iter_mut() {
         let mut translation = Vec3::ZERO;
         let speed = 100.0;
 
