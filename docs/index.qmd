@@ -16,3 +16,7 @@ title: "ldjam55"
 - Protect tower
 - Auto battler
 - Exploration
+
+# TODO
+- Make rng seed and map seed separate so that map can be predictable at least...
+- Others things we want predictable can be an addition to the seed and a hash as a shortcut...

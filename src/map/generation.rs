@@ -1,37 +1,96 @@
 use bevy::prelude::*;
-use bevy_rand::prelude::*;
-use bevy_prng::WyRand;
 use bevy_ecs_tilemap::prelude::*;
+use bevy_prng::WyRand;
+use bevy_rand::prelude::*;
 use noise::utils::{NoiseMap, NoiseMapBuilder, PlaneMapBuilder};
 use noise::{Fbm, Perlin, Value};
 use rand::Rng;
 
-use crate::{GameAssets, GameConfig, GameState};
+use crate::{GameAssets, GameConfig, GameState, MapFogOfWar, MapGround, MapStuff, PlayerTower};
 
 pub struct MapGenerationPlugin;
 
 impl Plugin for MapGenerationPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Startup, 
+        app.add_systems(
+            Startup,
             (
                 generate_world,
                 place_towers,
-
                 draw_map,
-            
-            ).chain()
-        
+                spawn_player_tower,
+                center_camera_on_player_tower,
+            )
+                .chain(),
         );
     }
 }
 
-fn draw_map(mut commands: Commands,
-    asset_server: Res<AssetServer>,
-    assets: Res<GameAssets>,
-    mut state: ResMut<GameState>,
-    ) 
-{
+fn center_camera_on_player_tower(
+    state: Res<GameState>,
+    mut query: Query<&mut Transform, With<Camera>>,
+    mut q2: Query<&TilePos, (With<PlayerTower>, Without<Camera>)>,
+    ) {
+    let player_tower_tilepos = q2.single();
+    let mut camera_transform = query.single_mut();
 
+    // Map is centered at 0, 0 and size is 1000, 1000
+    // tile sizes are 32x32
+    
+    let player_tower_x = player_tower_tilepos.x;
+    let player_tower_y = player_tower_tilepos.y;
+
+    let x = player_tower_x as f32 * 32.0;
+    let y = player_tower_y as f32 * 32.0;
+    // Map is centered, so subtract
+    camera_transform.translation = Vec3::new(x - 500.0 * 32.0, y - 500.0 * 32.0, 10.0);
+}
+
+fn spawn_player_tower(
+    mut commands: Commands,
+    state: Res<GameState>,
+    mut q: Query<(Entity, &MapStuff, &mut TileStorage), Without<MapFogOfWar>>,
+    mut fog_q: Query<(&MapFogOfWar, &TileStorage), Without<MapStuff>>,
+) {
+    let player_tower_location = state.player_tower_location;
+
+    let (e, map_stuff, mut tile_storage) = q.single_mut();
+    // No tile exists, need a new tile bundle
+    let tile_pos = TilePos {
+        x: player_tower_location.0 as u32,
+        y: player_tower_location.1 as u32,
+    };
+    let tile_entity = commands
+        .spawn((
+            TileBundle {
+                position: tile_pos,
+                tilemap_id: TilemapId(e),
+                texture_index: TileTextureIndex(6),
+                ..Default::default()
+            },
+            PlayerTower,
+        ))
+        .id();
+    tile_storage.set(&tile_pos, tile_entity);
+
+    // Clear out a radius of 6 around the player tower
+    // todo make circular
+    let (_map_fog_of_war, fog_tile_storage) = fog_q.single_mut();
+    for x in (player_tower_location.0 as i32 - 6)..=(player_tower_location.0 as i32 + 6) {
+        for y in (player_tower_location.1 as i32 - 6)..=(player_tower_location.1 as i32 + 6) {
+            let tile_pos = TilePos {
+                x: x as u32,
+                y: y as u32,
+            };
+            let tile_entity = fog_tile_storage.get(&tile_pos);
+            if let Some(tile_entity) = tile_entity {
+                commands.entity(tile_entity).despawn();
+            }
+        }   
+    }
+}
+
+fn draw_map(mut commands: Commands, assets: Res<GameAssets>, state: Res<GameState>) {
     // Do a basic 3 layers
     // 1 layer for ground
     // 2nd for stuff (towers, people, etc)
@@ -40,7 +99,7 @@ fn draw_map(mut commands: Commands,
 
     let map_size = TilemapSize { x: 1000, y: 1000 };
     let mut tile_storage = TileStorage::empty(map_size);
-    let tilemap_entity = commands.spawn_empty().id();
+    let tilemap_entity = commands.spawn(MapGround).id();
 
     for x in 0..1000_u32 {
         for y in 0..1000_u32 {
@@ -63,20 +122,62 @@ fn draw_map(mut commands: Commands,
     let grid_size = tile_size.into();
     let map_type = TilemapType::default();
 
-    commands.entity(tilemap_entity).insert((
-        TilemapBundle {
-            grid_size,
-            map_type,
-            size: map_size,
-            storage: tile_storage,
-            texture: TilemapTexture::Single(tile_texture_handle),
-            tile_size,
-            transform: get_tilemap_center_transform(&map_size, &grid_size, &map_type, 0.0),
-            ..Default::default()
-        },
-    ));
-}
+    commands.entity(tilemap_entity).insert((TilemapBundle {
+        grid_size,
+        map_type,
+        size: map_size,
+        storage: tile_storage,
+        texture: TilemapTexture::Single(tile_texture_handle),
+        tile_size,
+        transform: get_tilemap_center_transform(&map_size, &grid_size, &map_type, 0.0),
+        ..Default::default()
+    },));
 
+    let tile_texture_handle = assets.tiles.clone();
+    // Spawn the second layer, but it's empty
+    let tilemap_entity = commands.spawn(MapStuff).id();
+    let mut tile_storage = TileStorage::empty(map_size);
+    commands.entity(tilemap_entity).insert((TilemapBundle {
+        grid_size,
+        map_type,
+        size: map_size,
+        storage: tile_storage,
+        texture: TilemapTexture::Single(tile_texture_handle),
+        tile_size,
+        transform: get_tilemap_center_transform(&map_size, &grid_size, &map_type, 1.0),
+        ..Default::default()
+    },));
+
+    // 3rd layer (Fog of war) all black (tilemap index 7)
+    let tilemap_entity = commands.spawn(MapFogOfWar).id();
+    let mut tile_storage = TileStorage::empty(map_size);
+    for x in 0..1000_u32 {
+        for y in 0..1000_u32 {
+            let tile_pos = TilePos { x, y };
+            let tile_entity = commands
+                .spawn(TileBundle {
+                    position: tile_pos,
+                    tilemap_id: TilemapId(tilemap_entity),
+                    texture_index: TileTextureIndex(7),
+                    ..Default::default()
+                })
+                .id();
+            tile_storage.set(&tile_pos, tile_entity);
+        }
+    }
+
+    let tile_texture_handle = assets.tiles.clone();
+    commands.entity(tilemap_entity).insert((TilemapBundle {
+        grid_size,
+        map_type,
+        size: map_size,
+        storage: tile_storage,
+        texture: TilemapTexture::Single(tile_texture_handle),
+        tile_size,
+        transform: get_tilemap_center_transform(&map_size, &grid_size, &map_type, 2.0),
+        ..Default::default()
+    },));
+}
 
 fn create_map(seed: u32) -> NoiseMap {
     let fbm = Fbm::<Value>::new(seed);
@@ -186,7 +287,8 @@ fn simulate_rainfall_river_generation_erosion(
 }
 
 fn get_index(val: f64) -> u32 {
-    match val.abs() { // previously with .abs()
+    match val.abs() {
+        // previously with .abs()
         // Dark blue water
         v if v < 0.03 => 0,
         // Light blue water
@@ -245,10 +347,7 @@ fn create_treasure_spots(rng: &mut GlobalEntropy<WyRand>) -> Vec<(usize, usize)>
 #[derive(Resource, Deref)]
 struct Root(Entity);
 
-fn generate_world(
-    mut rng: ResMut<GlobalEntropy<WyRand>>,
-    mut gamestate: ResMut<GameState>,
-) {
+fn generate_world(mut rng: ResMut<GlobalEntropy<WyRand>>, mut gamestate: ResMut<GameState>) {
     let map = create_map(rng.gen::<u32>());
     let map = simulate_rainfall_river_generation_erosion(map, 10, 0.01);
 
@@ -258,16 +357,15 @@ fn generate_world(
     gamestate.map = map;
 }
 
-fn place_towers(
-    mut res: ResMut<GameState>,
-    mut rng: ResMut<GlobalEntropy<WyRand>>) 
-{
+fn place_towers(mut res: ResMut<GameState>, mut rng: ResMut<GlobalEntropy<WyRand>>) {
     let mut player_loc: (u64, u64);
     // Find a location that is within 200,200 and 800,800 (so not the edge of the map)
     player_loc = (rng.gen_range(200..800), rng.gen_range(200..800));
     loop {
         // Between 0.1 and 0.7
-        let val = res.map.get_value(player_loc.0 as usize, player_loc.1 as usize);
+        let val = res
+            .map
+            .get_value(player_loc.0 as usize, player_loc.1 as usize);
         if val > 0.1 && val < 0.7 {
             break;
         }
@@ -283,7 +381,9 @@ fn place_towers(
         let mut enemy_loc: (u64, u64);
         enemy_loc = (rng.gen_range(100..900), rng.gen_range(100..900));
         loop {
-            let val = res.map.get_value(enemy_loc.0 as usize, enemy_loc.1 as usize);
+            let val = res
+                .map
+                .get_value(enemy_loc.0 as usize, enemy_loc.1 as usize);
             if val > 0.1 {
                 break;
             }
