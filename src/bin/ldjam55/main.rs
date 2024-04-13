@@ -45,7 +45,7 @@ fn main() {
         .add_plugins(EntropyPlugin::<WyRand>::default())
         .add_plugins(TilemapPlugin)
         // States
-        .init_state::<State>()
+        .init_state::<Game>()
         // Game-level resources
         .insert_resource(GameState::default())
         .insert_resource(GameAssets::default())
@@ -53,7 +53,8 @@ fn main() {
         .add_systems(Startup, setup)
         .add_systems(PreUpdate, camera_control)
         // Game plugins
-        .add_plugins(MapGenerationPlugin);
+        .add_plugins(MapGenerationPlugin)
+        .add_plugins(UnitsUiPlugin);
 
     #[cfg(debug_assertions)]
     app.add_plugins((FrameTimeDiagnosticsPlugin, LogDiagnosticsPlugin::default()));
@@ -70,16 +71,6 @@ fn main() {
     }
 
     app.run();
-}
-
-#[derive(States, Default, Debug, Clone, PartialEq, Eq, Hash)]
-pub enum State {
-    #[default]
-    MapGeneration,
-    Loading, // Here, but dunno if we need it
-    Playing,
-    Menu,
-    Paused,
 }
 
 fn setup(

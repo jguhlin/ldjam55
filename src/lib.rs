@@ -1,15 +1,28 @@
 #![allow(clippy::type_complexity)]
 #![feature(trivial_bounds)]
 
-use bevy::prelude::*;
-use bevy_prng::WyRand;
-use bevy_rand::prelude::{EntropyComponent, EntropyPlugin, ForkableRng, GlobalEntropy};
-use noise::utils::NoiseMap;
-use rand::prelude::{IteratorRandom, Rng};
+pub use bevy::prelude::*;
+pub use bevy_prng::WyRand;
+pub use bevy_rand::prelude::{EntropyComponent, EntropyPlugin, ForkableRng, GlobalEntropy};
+pub use noise::utils::NoiseMap;
+pub use rand::prelude::{IteratorRandom, Rng};
+pub use xxhash_rust::xxh3::xxh3_64;
 
 pub mod map;
+pub mod ui;
 
 pub use map::*;
+pub use ui::*;
+
+#[derive(States, Default, Debug, Clone, PartialEq, Eq, Hash)]
+pub enum Game {
+    #[default]
+    MapGeneration,
+    Loading, // Here, but dunno if we need it
+    Playing,
+    Menu,
+    Paused,
+}
 
 #[derive(Resource)]
 pub struct GameConfig {
@@ -38,6 +51,7 @@ pub struct GameState {
     pub player_tower_location: (u32, u32),
     pub enemy_tower_locations: Vec<(u32, u32)>,
     pub map: NoiseMap,
+    pub score: u64,
 }
 
 #[derive(Resource, Default)]

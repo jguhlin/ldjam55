@@ -31,7 +31,10 @@ fn center_camera_on_player_tower(
     state: Res<GameState>,
     mut query: Query<&mut Transform, With<Camera>>,
     mut q2: Query<&TilePos, (With<PlayerTower>, Without<Camera>)>,
+    mut game: ResMut<NextState<Game>>,
 ) {
+    game.set(Game::Playing);
+
     let player_tower_tilepos = q2.single();
     let mut camera_transform = query.single_mut();
 
@@ -213,7 +216,7 @@ fn create_map(seed: u32) -> NoiseMap {
     }
 
     // Min and max should be between 0 and 1
-    
+
     // f64 so have to use fold
     let max = noise_map.iter().fold(f64::MIN, |acc, x| acc.max(*x));
     let min = noise_map.iter().fold(f64::MAX, |acc, x| acc.min(*x));
@@ -355,7 +358,6 @@ fn get_index(val: f64) -> u32 {
     }
 }
 
-
 fn create_treasure_spots(seed: u32) -> Vec<(u32, u32)> {
     let mut locs = Vec::new();
 
@@ -384,7 +386,9 @@ fn generate_world(
     let map = simulate_rainfall_river_generation_erosion(map, 2, 0.01);
 
     let treasure_spots = create_treasure_spots(config.seed);
-    commands.insert_resource(TreasureLocs { locs: treasure_spots });
+    commands.insert_resource(TreasureLocs {
+        locs: treasure_spots,
+    });
 
     gamestate.map = map;
     log::info!("World generated");
@@ -392,7 +396,7 @@ fn generate_world(
 
 fn place_towers(mut res: ResMut<GameState>, config: Res<GameConfig>) {
     let mut rng = WyRand::seed_from_u64(xxh3_64(&config.seed.to_le_bytes()[..]));
-    
+
     let mut player_loc: (u32, u32);
     // Find a location that is within 200,200 and 800,800 (so not the edge of the map)
     player_loc = (rng.gen_range(200..800), rng.gen_range(200..800));
