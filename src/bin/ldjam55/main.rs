@@ -54,8 +54,8 @@ fn main() {
         .add_systems(PreUpdate, camera_control)
         // Game plugins
         .add_plugins(MapGenerationPlugin)
-        .add_plugins(UnitsUiPlugin { 
-            state: Game::Playing 
+        .add_plugins(UnitsUiPlugin {
+            state: Game::Playing,
         });
 
     #[cfg(debug_assertions)]
@@ -81,6 +81,7 @@ fn setup(
     mut assets: ResMut<GameAssets>,
     asset_server: Res<AssetServer>,
 ) {
+    log::info!("Running setup");
     let texture_handle: Handle<Image> = asset_server.load("tiles.png");
     assets.tiles = texture_handle;
 
@@ -88,6 +89,7 @@ fn setup(
         tower: asset_server.load("icons/tower.png"),
         x: asset_server.load("icons/x.png"),
         shield: asset_server.load("icons/shield.png"),
+        plus: asset_server.load("icons/plus.png"),
     };
 
     commands.spawn(PointLightBundle {
@@ -108,6 +110,7 @@ fn setup(
     let seed: u64 = unsafe { std::mem::transmute(seed) };
 
     commands.insert_resource(GlobalEntropy::new(WyRand::new(wyrand::WyRand::new(seed))));
+    log::info!("Setup complete");
 }
 
 fn camera_control(

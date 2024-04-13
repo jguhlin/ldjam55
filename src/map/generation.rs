@@ -9,12 +9,16 @@ use xxhash_rust::xxh3::xxh3_64;
 
 use crate::*;
 
+#[derive(Event)]
+pub struct GoToTowerEvent;
+
 pub struct MapGenerationPlugin;
 
 impl Plugin for MapGenerationPlugin {
     fn build(&self, app: &mut App) {
+        app.add_event::<GoToTowerEvent>();
         app.add_systems(
-            Startup,
+            OnEnter(Game::MapGeneration),
             (
                 generate_world,
                 place_towers,
@@ -23,6 +27,10 @@ impl Plugin for MapGenerationPlugin {
                 center_camera_on_player_tower,
             )
                 .chain(),
+        )
+        .add_systems(
+            Update,
+            center_camera_on_player_tower.run_if(on_event::<GoToTowerEvent>()),
         );
     }
 }
@@ -373,9 +381,6 @@ fn create_treasure_spots(seed: u32) -> Vec<(u32, u32)> {
 
     locs
 }
-
-#[derive(Resource, Deref)]
-struct Root(Entity);
 
 fn generate_world(
     mut commands: Commands,
