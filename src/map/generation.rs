@@ -1,12 +1,12 @@
 use bevy::prelude::*;
 use bevy_rand::prelude::*;
-use bevy_prng::Xoroshiro64StarStar;
+use bevy_prng::WyRand;
 use bevy_ecs_tilemap::prelude::*;
 use noise::utils::{NoiseMap, NoiseMapBuilder, PlaneMapBuilder};
 use noise::{Fbm, Perlin, Value};
 use rand::Rng;
 
-use crate::{GameConfig, GameState};
+use crate::{GameAssets, GameConfig, GameState};
 
 pub struct MapGenerationPlugin;
 
@@ -27,10 +27,56 @@ impl Plugin for MapGenerationPlugin {
 
 fn draw_map(mut commands: Commands,
     asset_server: Res<AssetServer>,
-    
-    ) {
-    let texture_handle: Handle<Image> = asset_server.load("tiles.png");
+    assets: Res<GameAssets>,
+    mut state: ResMut<GameState>,
+    ) 
+{
+
+    // Do a basic 3 layers
+    // 1 layer for ground
+    // 2nd for stuff (towers, people, etc)
+    // 3rd layer for fog of war (unexplored regions)
+    let tile_texture_handle = assets.tiles.clone();
+
+    let map_size = TilemapSize { x: 1000, y: 1000 };
+    let mut tile_storage = TileStorage::empty(map_size);
+    let tilemap_entity = commands.spawn_empty().id();
+
+    for x in 0..1000_u32 {
+        for y in 0..1000_u32 {
+            let val = state.map.get_value(x as usize, y as usize);
+            let tilemap_idx = get_index(val);
+            let tile_pos = TilePos { x, y };
+            let tile_entity = commands
+                .spawn(TileBundle {
+                    position: tile_pos,
+                    tilemap_id: TilemapId(tilemap_entity),
+                    texture_index: TileTextureIndex(tilemap_idx),
+                    ..Default::default()
+                })
+                .id();
+            tile_storage.set(&tile_pos, tile_entity);
+        }
+    }
+
+    let tile_size = TilemapTileSize { x: 32.0, y: 32.0 };
+    let grid_size = tile_size.into();
+    let map_type = TilemapType::default();
+
+    commands.entity(tilemap_entity).insert((
+        TilemapBundle {
+            grid_size,
+            map_type,
+            size: map_size,
+            storage: tile_storage,
+            texture: TilemapTexture::Single(tile_texture_handle),
+            tile_size,
+            transform: get_tilemap_center_transform(&map_size, &grid_size, &map_type, 0.0),
+            ..Default::default()
+        },
+    ));
 }
+
 
 fn create_map(seed: u32) -> NoiseMap {
     let fbm = Fbm::<Value>::new(seed);
@@ -139,6 +185,27 @@ fn simulate_rainfall_river_generation_erosion(
     map
 }
 
+fn get_index(val: f64) -> u32 {
+    match val.abs() { // previously with .abs()
+        // Dark blue water
+        v if v < 0.03 => 0,
+        // Light blue water
+        v if v < 0.08 => 1,
+        v if v < 0.1 => 2,
+        v if v < 0.2 => 3,
+        v if v < 0.3 => 4,
+        v if v < 0.4 => 4,
+        v if v < 0.5 => 4,
+        v if v < 0.6 => 4,
+        // Mountains (guessing)
+        v if v < 0.7 => 5,
+        v if v < 0.8 => 5,
+        v if v < 0.9 => 5,
+        v if v <= 1.0 => 5,
+        _ => panic!("Unexpected value for color"),
+    }
+}
+
 fn get_color(val: f64) -> Color {
     let color_result = match val.abs() {
         // Dark blue water
@@ -158,10 +225,10 @@ fn get_color(val: f64) -> Color {
         v if v <= 1.0 => Color::hex("#ffffff"),
         _ => panic!("Unexpected value for color"),
     };
-    color_result.expect("Getting color from HEX error")
+    color_result.unwrap()
 }
 
-fn create_treasure_spots(rng: &mut GlobalEntropy<Xoroshiro64StarStar>) -> Vec<(usize, usize)> {
+fn create_treasure_spots(rng: &mut GlobalEntropy<WyRand>) -> Vec<(usize, usize)> {
     let mut locs = Vec::new();
 
     // Generate between 200 and 500 treasure spots
@@ -178,8 +245,8 @@ fn create_treasure_spots(rng: &mut GlobalEntropy<Xoroshiro64StarStar>) -> Vec<(u
 #[derive(Resource, Deref)]
 struct Root(Entity);
 
-fn generate_world(mut commands: Commands, 
-    mut rng: ResMut<GlobalEntropy<Xoroshiro64StarStar>>,
+fn generate_world(
+    mut rng: ResMut<GlobalEntropy<WyRand>>,
     mut gamestate: ResMut<GameState>,
 ) {
     let map = create_map(rng.gen::<u32>());
@@ -187,55 +254,13 @@ fn generate_world(mut commands: Commands,
 
     let treasure_spots = create_treasure_spots(&mut *rng);
     log::info!("Treasure spots: {:?}", treasure_spots.len());
-   
-
-    let (grid_width, grid_height) = map.size();
-    debug!("Map size: {}x{}", grid_width, grid_height);
-
-    let tile_size = 16_f32;
-
-    let start_x = -(grid_width as f32) * tile_size / 2.0;
-    let start_y = -(grid_height as f32) * tile_size / 2.0;
-
-    let root = commands
-        .spawn(SpatialBundle::default())
-        .with_children(|parent| {
-            for col_x in 0..grid_width {
-                for col_y in 0..grid_height {
-                    let val = map.get_value(col_x, col_y);
-                    let x = start_x + col_x as f32 * tile_size;
-                    let y = start_y + col_y as f32 * tile_size;
-
-                    let mut color = get_color(val);
-
-                    // Check if this is a treasure spot
-                    // For debugging!
-                    if treasure_spots.iter().any(|(tx, ty)| *tx == col_x && *ty == col_y) {
-                        color = Color::hex("#ff0000").expect("Getting color from HEX error");
-                    }
-
-                    parent.spawn(SpriteBundle {
-                        sprite: Sprite {
-                            color: color,
-                            custom_size: Some(Vec2::new(tile_size, tile_size)),
-                            ..default()
-                        },
-                        transform: Transform::from_translation(Vec3::new(x, y, 0.)),
-                        ..default()
-                    });
-                }
-            }
-        })
-        .id();
-
-    commands.insert_resource(Root(root));
 
     gamestate.map = map;
 }
 
 fn place_towers(
     mut res: ResMut<GameState>,
-    mut rng: ResMut<GlobalEntropy<Xoroshiro64StarStar>>) 
+    mut rng: ResMut<GlobalEntropy<WyRand>>) 
 {
     let mut player_loc: (u64, u64);
     // Find a location that is within 200,200 and 800,800 (so not the edge of the map)

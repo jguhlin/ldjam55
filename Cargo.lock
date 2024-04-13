@@ -2847,6 +2847,7 @@ dependencies = [
  "strum_macros",
  "webbrowser",
  "winit",
+ "wyrand",
  "xxhash-rust",
 ]
 

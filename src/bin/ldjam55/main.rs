@@ -5,13 +5,16 @@ use bevy::winit::WinitWindows;
 use bevy_egui::{egui, EguiContexts, EguiPlugin, EguiSettings};
 use bevy_inspector_egui::quick::WorldInspectorPlugin;
 use bevy_mod_picking::prelude::*;
-use bevy_prng::Xoroshiro64StarStar;
+use bevy_prng::WyRand;
 use bevy_rand::prelude::*;
+use bevy_ecs_tilemap::prelude::*;
+use wyrand;
 
 #[cfg(debug_assertions)]
 use bevy::diagnostic::{FrameTimeDiagnosticsPlugin, LogDiagnosticsPlugin};
 
 use ldjam55::*;
+use rand::SeedableRng;
 
 fn main() {
     let mut app = App::new();
@@ -35,30 +38,33 @@ fn main() {
                 ..default()
             }),
             ..default()
-        }))
-        .add_plugins(EntropyPlugin::<Xoroshiro64StarStar>::default())
+        })
+        .set(ImagePlugin::default_nearest()))
+        .add_plugins(EntropyPlugin::<WyRand>::default())
+        .add_plugins(TilemapPlugin)
 
         // States
         .init_state::<State>()
 
         // Game-level resources
         .insert_resource(GameState::default())
+        .insert_resource(GameAssets::default())
 
         // Systems
         .add_systems(Startup, setup)
         .add_systems(PreUpdate, camera_control)
         
         // Game plugins
+        .add_plugins(MapGenerationPlugin)
         ;
 
     #[cfg(debug_assertions)]
-    app.add_plugins((FrameTimeDiagnosticsPlugin, LogDiagnosticsPlugin::default()))
-        .add_plugins(MapGenerationPlugin);
+    app.add_plugins((FrameTimeDiagnosticsPlugin, LogDiagnosticsPlugin::default()));
 
     // Enable only for development
     #[cfg(debug_assertions)]
     {
-        app.add_plugins(WorldInspectorPlugin::new());
+        // app.add_plugins(WorldInspectorPlugin::new());
     }
 
     #[cfg(not(debug_assertions))]
@@ -82,8 +88,13 @@ pub enum State {
 fn setup(
     mut commands: Commands,
     config: Res<GameConfig>,
-    mut rng: ResMut<GlobalEntropy<Xoroshiro64StarStar>>,
+    mut assets: ResMut<GameAssets>,
+    asset_server: Res<AssetServer>,
 ) {
+
+    let texture_handle: Handle<Image> = asset_server.load("tiles.png");
+    assets.tiles = texture_handle;
+
     commands.spawn(PointLightBundle {
         point_light: PointLight {
             intensity: 9000.0,
@@ -99,9 +110,9 @@ fn setup(
     // Take u32 twice and convert to u64 from config.seed
     // Using mem::transmute to convert u32 to u64
     let seed: [u32; 2] = [config.seed; 2];
-    let seed: [u8; 8] = unsafe { std::mem::transmute(seed) };
+    let seed: u64 = unsafe { std::mem::transmute(seed) };
 
-    rng.reseed(seed);
+    commands.insert_resource(GlobalEntropy::new(WyRand::new(wyrand::WyRand::new(seed))));
 }
 
 fn camera_control(
