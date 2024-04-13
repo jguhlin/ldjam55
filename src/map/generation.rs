@@ -1,18 +1,35 @@
 use bevy::prelude::*;
 use bevy_rand::prelude::*;
 use bevy_prng::Xoroshiro64StarStar;
+use bevy_ecs_tilemap::prelude::*;
 use noise::utils::{NoiseMap, NoiseMapBuilder, PlaneMapBuilder};
 use noise::{Fbm, Perlin, Value};
 use rand::Rng;
 
-use crate::GameConfig;
+use crate::{GameConfig, GameState};
 
 pub struct MapGenerationPlugin;
 
 impl Plugin for MapGenerationPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Startup, generate_world);
+        app.add_systems(Startup, 
+            (
+                generate_world,
+                place_towers,
+
+                draw_map,
+            
+            ).chain()
+        
+        );
     }
+}
+
+fn draw_map(mut commands: Commands,
+    asset_server: Res<AssetServer>,
+    
+    ) {
+    let texture_handle: Handle<Image> = asset_server.load("tiles.png");
 }
 
 fn create_map(seed: u32) -> NoiseMap {
@@ -135,6 +152,7 @@ fn get_color(val: f64) -> Color {
         v if v < 0.5 => Color::hex("#3ff03f"),
         v if v < 0.6 => Color::hex("#65f365"),
         v if v < 0.7 => Color::hex("#8cf68c"),
+        // Mountains (guessing)
         v if v < 0.8 => Color::hex("#b2f9b2"),
         v if v < 0.9 => Color::hex("#d9fcd9"),
         v if v <= 1.0 => Color::hex("#ffffff"),
@@ -160,7 +178,10 @@ fn create_treasure_spots(rng: &mut GlobalEntropy<Xoroshiro64StarStar>) -> Vec<(u
 #[derive(Resource, Deref)]
 struct Root(Entity);
 
-fn generate_world(mut commands: Commands, mut rng: ResMut<GlobalEntropy<Xoroshiro64StarStar>>) {
+fn generate_world(mut commands: Commands, 
+    mut rng: ResMut<GlobalEntropy<Xoroshiro64StarStar>>,
+    mut gamestate: ResMut<GameState>,
+) {
     let map = create_map(rng.gen::<u32>());
     let map = simulate_rainfall_river_generation_erosion(map, 10, 0.01);
 
@@ -208,4 +229,41 @@ fn generate_world(mut commands: Commands, mut rng: ResMut<GlobalEntropy<Xoroshir
         .id();
 
     commands.insert_resource(Root(root));
+
+    gamestate.map = map;
+}
+
+fn place_towers(
+    mut res: ResMut<GameState>,
+    mut rng: ResMut<GlobalEntropy<Xoroshiro64StarStar>>) 
+{
+    let mut player_loc: (u64, u64);
+    // Find a location that is within 200,200 and 800,800 (so not the edge of the map)
+    player_loc = (rng.gen_range(200..800), rng.gen_range(200..800));
+    loop {
+        // Between 0.1 and 0.7
+        let val = res.map.get_value(player_loc.0 as usize, player_loc.1 as usize);
+        if val > 0.1 && val < 0.7 {
+            break;
+        }
+        player_loc = (rng.gen_range(200..800), rng.gen_range(200..800));
+    }
+
+    res.player_tower_location = player_loc;
+
+    // Place between 10 and 20 enemy towers
+
+    let num_enemy_towers = rng.gen_range(10..20);
+    for _ in 0..num_enemy_towers {
+        let mut enemy_loc: (u64, u64);
+        enemy_loc = (rng.gen_range(100..900), rng.gen_range(100..900));
+        loop {
+            let val = res.map.get_value(enemy_loc.0 as usize, enemy_loc.1 as usize);
+            if val > 0.1 {
+                break;
+            }
+            enemy_loc = (rng.gen_range(200..800), rng.gen_range(200..800));
+        }
+        res.enemy_tower_locations.push(enemy_loc);
+    }
 }

@@ -18,7 +18,7 @@ fn main() {
     // .add_plugins(DefaultPlugins.set(low_latency_window_plugin()))
     // Normally MSAA 4 but from the template (for web? I suspect) we turn it off
     app
-        // Resources
+        // Engine-level Resources
         .insert_resource(Msaa::Off)
         .insert_resource(GameConfig::default())
         .insert_resource(AssetMetaCheck::Never)
@@ -39,7 +39,10 @@ fn main() {
         .add_plugins(EntropyPlugin::<Xoroshiro64StarStar>::default())
 
         // States
-        .init_state::<GameState>()
+        .init_state::<State>()
+
+        // Game-level resources
+        .insert_resource(GameState::default())
 
         // Systems
         .add_systems(Startup, setup)
@@ -49,8 +52,7 @@ fn main() {
         ;
 
     #[cfg(debug_assertions)]
-    app
-        .add_plugins((FrameTimeDiagnosticsPlugin, LogDiagnosticsPlugin::default()))
+    app.add_plugins((FrameTimeDiagnosticsPlugin, LogDiagnosticsPlugin::default()))
         .add_plugins(MapGenerationPlugin);
 
     // Enable only for development
@@ -68,7 +70,7 @@ fn main() {
 }
 
 #[derive(States, Default, Debug, Clone, PartialEq, Eq, Hash)]
-pub enum GameState {
+pub enum State {
     #[default]
     MapGeneration,
     Loading, // Here, but dunno if we need it
@@ -77,7 +79,11 @@ pub enum GameState {
     Paused,
 }
 
-fn setup(mut commands: Commands, config: Res<GameConfig>, mut rng: ResMut<GlobalEntropy<Xoroshiro64StarStar>>) {
+fn setup(
+    mut commands: Commands,
+    config: Res<GameConfig>,
+    mut rng: ResMut<GlobalEntropy<Xoroshiro64StarStar>>,
+) {
     commands.spawn(PointLightBundle {
         point_light: PointLight {
             intensity: 9000.0,
@@ -93,7 +99,7 @@ fn setup(mut commands: Commands, config: Res<GameConfig>, mut rng: ResMut<Global
     // Take u32 twice and convert to u64 from config.seed
     // Using mem::transmute to convert u32 to u64
     let seed: [u32; 2] = [config.seed; 2];
-    let seed: [u8;  8] = unsafe { std::mem::transmute(seed) };
+    let seed: [u8; 8] = unsafe { std::mem::transmute(seed) };
 
     rng.reseed(seed);
 }
