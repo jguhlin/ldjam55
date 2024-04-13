@@ -57,6 +57,14 @@ pub struct GameState {
 #[derive(Resource, Default)]
 pub struct GameAssets {
     pub tiles: Handle<Image>,
+    pub icons: Icons,
+}
+
+#[derive(Default)]
+pub struct Icons {
+    pub tower: Handle<Image>,
+    pub x: Handle<Image>,
+    pub shield: Handle<Image>,
 }
 
 impl Default for GameConfig {

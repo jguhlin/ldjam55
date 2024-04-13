@@ -54,7 +54,9 @@ fn main() {
         .add_systems(PreUpdate, camera_control)
         // Game plugins
         .add_plugins(MapGenerationPlugin)
-        .add_plugins(UnitsUiPlugin);
+        .add_plugins(UnitsUiPlugin { 
+            state: Game::Playing 
+        });
 
     #[cfg(debug_assertions)]
     app.add_plugins((FrameTimeDiagnosticsPlugin, LogDiagnosticsPlugin::default()));
@@ -81,6 +83,12 @@ fn setup(
 ) {
     let texture_handle: Handle<Image> = asset_server.load("tiles.png");
     assets.tiles = texture_handle;
+
+    assets.icons = Icons {
+        tower: asset_server.load("icons/tower.png"),
+        x: asset_server.load("icons/x.png"),
+        shield: asset_server.load("icons/shield.png"),
+    };
 
     commands.spawn(PointLightBundle {
         point_light: PointLight {
