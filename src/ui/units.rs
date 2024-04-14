@@ -24,6 +24,12 @@ impl<S: States> Plugin for UnitsUiPlugin<S> {
     }
 }
 
+#[derive(Component, Deref, DerefMut, PartialEq, Eq)]
+pub struct Slot {
+    #[deref]
+    pub slot: u8,
+}
+
 #[derive(Event)]
 pub struct AddUnitConfirm {
     slot: u8,
@@ -56,6 +62,9 @@ fn add_unit_confirm(
     query: Query<(Entity, &AddUnitMenu)>,
     assets: Res<GameAssets>,
     tilemap_q: Query<(&Transform, &TilemapType, &TilemapGridSize, &TileStorage), With<MapStuff>>,
+    mut ev_addunitcomplete: EventWriter<AddUnitComplete>,
+
+    mut button_query: Query<(Entity, &Slot, &Button, &UiImage)>,
 ) {
     // Despawn the menu
     for (e, AddUnitMenu) in query.iter() {
@@ -67,6 +76,7 @@ fn add_unit_confirm(
 
     // Get event data
     for AddUnitConfirm { slot, unit } in ev_addunitconfirm.read() {
+        ev_addunitcomplete.send(AddUnitComplete);
         let unit = match unit {
             UnitType::Scout => Unit::scout(),
             UnitType::Excavation => Unit::excavation(),
@@ -76,44 +86,48 @@ fn add_unit_confirm(
         let mut spawn_pos = game_state.player_tower_location;
         // 1 below the player tower
         spawn_pos.1 -= 1;
-        let spawn_pos = TilePos { x: spawn_pos.0 as u32, y: spawn_pos.1 as u32 };
+        let spawn_pos = TilePos {
+            x: spawn_pos.0 as u32,
+            y: spawn_pos.1 as u32,
+        };
         let spawn_pos = spawn_pos.center_in_world(grid_size, map_type).extend(3.5);
         let transform = *map_transform * Transform::from_translation(spawn_pos);
 
-        log::info!("Spawning unit at {:?} because of pos {:?}", transform, game_state.player_tower_location);
+        let image = unit.unit_type.icon(&assets);
 
         let id = commands
             .spawn((
                 Name::from(format!("Unit {}", slot)),
                 unit,
-                SpriteSheetBundle {
-                    texture: assets.tiles.clone(),
-                    atlas: TextureAtlas {
-                        layout: assets.tiles_layout.clone(),
-                        index: 8,
-                    },
-                    // Place right below the player tower
+                SpatialBundle {
                     transform,
                     ..default()
                 },
+                UnitUninitialized,
             ))
             .id();
 
-        log::info!("Spawned at {:?} with id {:?}", transform, id);
-
         // Update the game state
         game_state.units[*slot as usize] = UnitEntry::Summoned(id);
+
+        // Update the button
+        for (e, button_slot, _button, _image) in button_query.iter_mut() {
+            if button_slot.slot == *slot {
+                commands
+                    .entity(e)
+                    .insert(UiImage::new(image.clone()))
+                    .remove::<AddUnitButton>();
+            }
+        }
     }
 }
 
 fn add_unit(
     mut commands: Commands,
-    ev_addunit: Res<Events<AddUnitEvent>>,
-    mut game_state: ResMut<GameState>,
     query: Query<(Entity, &AddUnitButton, &Button)>,
     assets: Res<GameAssets>,
 ) {
-    for (e, AddUnitButton(unit), button) in query.iter() {
+    for (_e, AddUnitButton(unit), button) in query.iter() {
         commands.insert_resource(AddingUnit { slot: *unit });
 
         // Display a set of buttons to ask what type of unit to summon
@@ -247,6 +261,7 @@ fn interaction(
             Option<&AddScoutUnitButton>,
             Option<&AddExcavationUnitButton>,
             Option<&AddAttackUnitButton>,
+            Option<&Slot>,
         ),
         (Changed<Interaction>, With<Button>),
     >,
@@ -254,6 +269,7 @@ fn interaction(
     mut ev_addunit: EventWriter<AddUnitEvent>,
     mut ev_addunitconfirm: EventWriter<AddUnitConfirm>,
     adding_unit: Option<Res<AddingUnit>>,
+    mut selected_unit: ResMut<SelectedUnit>,
 ) {
     for (
         e,
@@ -265,6 +281,7 @@ fn interaction(
         add_scout,
         add_excavation,
         add_attack,
+        slot,
     ) in interaction_query.iter_mut()
     {
         match *interaction {
@@ -281,10 +298,12 @@ fn interaction(
 
         if go_to_tower.is_some() && *interaction == Interaction::Pressed {
             ev_gototower.send(GoToTowerEvent);
+            selected_unit.unit = None;
         }
 
         if add_unit.is_some() && *interaction == Interaction::Pressed {
             ev_addunit.send(AddUnitEvent);
+            selected_unit.unit = None;
         }
 
         if add_scout.as_ref().is_some() && *interaction == Interaction::Pressed {
@@ -294,6 +313,7 @@ fn interaction(
                     slot: slot,
                     unit: UnitType::Scout,
                 });
+                selected_unit.unit = None;
             }
         }
 
@@ -304,6 +324,7 @@ fn interaction(
                     slot: slot,
                     unit: UnitType::Excavation,
                 });
+                selected_unit.unit = None;
             }
         }
 
@@ -314,7 +335,13 @@ fn interaction(
                     slot: slot,
                     unit: UnitType::Attack,
                 });
+                selected_unit.unit = None;
             }
+        }
+
+        if slot.as_ref().is_some() && *interaction == Interaction::Pressed {
+            let slot = slot.unwrap().slot;
+            selected_unit.unit = Some(slot);
         }
     }
 }
@@ -398,11 +425,14 @@ fn setup_units_bar(mut commands: Commands, assets: Res<GameAssets>, game_state: 
                             UnitEntry::Unavailable => assets.icons.x.clone(),
                             UnitEntry::Summoned(_) => assets.icons.shield.clone(), // todo
                         };
-                        let mut ec = parent.spawn(ButtonBundle {
-                            style: style.clone(),
-                            image: UiImage::new(image),
-                            ..default()
-                        });
+                        let mut ec = parent.spawn((
+                            ButtonBundle {
+                                style: style.clone(),
+                                image: UiImage::new(image),
+                                ..default()
+                            },
+                            Slot { slot: n as u8 },
+                        ));
 
                         match i {
                             UnitEntry::Available => {

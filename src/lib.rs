@@ -78,54 +78,6 @@ impl Default for GameState {
     }
 }
 
-pub enum UnitEntry {
-    Unavailable,
-    Available,
-    Summoned(Entity),
-}
-
-#[derive(Component)]
-pub struct Unit {
-    pub health: u32,
-    pub overworld_speed: u32,
-    pub excavation_speed: u32,
-    pub battle_speed: u32,
-    pub members: u32,
-    // todo: damage, health regen, attack types, etc...
-}
-
-impl Unit {
-    pub fn scout() -> Self {
-        Self {
-            health: 100,
-            overworld_speed: 20,
-            excavation_speed: 10,
-            battle_speed: 10,
-            members: 1,
-        }
-    }
-    pub fn excavation() -> Self {
-        Self {
-            health: 150,
-            overworld_speed: 10,
-            excavation_speed: 20,
-            battle_speed: 4,
-            members: 2,
-        }
-    }
-
-    // todo: archers, mages, infantry, etc...
-    pub fn attack() -> Self {
-        Self {
-            health: 100,
-            overworld_speed: 10,
-            excavation_speed: 1,
-            battle_speed: 10,
-            members: 2,
-        }
-    }
-}
-
 #[derive(Resource, Default)]
 pub struct GameAssets {
     pub tiles: Handle<Image>,
@@ -140,18 +92,17 @@ pub struct Icons {
     pub x: Handle<Image>,
     pub shield: Handle<Image>,
     pub plus: Handle<Image>,
+
+    // Unit icons for toolbar
+    pub scout: Handle<Image>,
+    pub excavator: Handle<Image>,
+    pub attack: Handle<Image>,
 }
 
 impl Default for GameConfig {
     fn default() -> Self {
         Self { seed: 42 }
     }
-}
-
-pub enum UnitType {
-    Scout,
-    Excavation,
-    Attack,
 }
 
 #[derive(Resource)]
@@ -162,4 +113,9 @@ impl Default for CursorPos {
         // correctly when the cursor moves.
         Self(Vec2::new(-1000.0, -1000.0))
     }
+}
+
+#[derive(Resource, Default)]
+pub struct SelectedUnit {
+    pub unit: Option<u8>, // slot
 }

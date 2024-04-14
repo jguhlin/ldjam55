@@ -50,6 +50,7 @@ fn main() {
         .insert_resource(GameState::default())
         .insert_resource(GameAssets::default())
         .insert_resource(CursorPos::default())
+        .insert_resource(SelectedUnit::default())
         // Systems
         .add_systems(Startup, setup)
         .add_systems(PreUpdate, camera_control)
@@ -58,20 +59,23 @@ fn main() {
         .add_plugins(MapGenerationPlugin)
         .add_plugins(UnitsUiPlugin {
             state: Game::Playing,
+        })
+        .add_plugins(UnitsPlugin {
+            state: Game::Playing,
+        })
+        .add_plugins(MapInteractionPlugin {
+            state: Game::Playing,
         });
 
     #[cfg(debug_assertions)]
-    app.add_plugins((FrameTimeDiagnosticsPlugin, LogDiagnosticsPlugin::default()));
-
-    // Enable only for development
-    #[cfg(debug_assertions)]
     {
+        // app.add_plugins((FrameTimeDiagnosticsPlugin, LogDiagnosticsPlugin::default()));
         // app.add_plugins(WorldInspectorPlugin::new());
     }
 
     #[cfg(not(debug_assertions))]
     {
-        app.add_plugins(EguiPlugin);
+        // app.add_plugins(EguiPlugin);
     }
 
     app.run();
@@ -115,6 +119,9 @@ fn setup(
         x: asset_server.load("icons/x.png"),
         shield: asset_server.load("icons/shield.png"),
         plus: asset_server.load("icons/plus.png"),
+        scout: asset_server.load("icons/scout.png"),
+        excavator: asset_server.load("icons/excavator.png"),
+        attack: asset_server.load("icons/attack.png"),
     };
 
     commands.spawn(PointLightBundle {
