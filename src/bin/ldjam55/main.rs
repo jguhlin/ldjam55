@@ -1,7 +1,7 @@
-use bevy::{asset::AssetMetaCheck, text};
 use bevy::prelude::*;
 use bevy::window::PrimaryWindow;
 use bevy::winit::WinitWindows;
+use bevy::{asset::AssetMetaCheck, text};
 use bevy_ecs_tilemap::prelude::*;
 use bevy_egui::{egui, EguiContexts, EguiPlugin, EguiSettings};
 use bevy_inspector_egui::quick::WorldInspectorPlugin;
@@ -49,9 +49,11 @@ fn main() {
         // Game-level resources
         .insert_resource(GameState::default())
         .insert_resource(GameAssets::default())
+        .insert_resource(CursorPos::default())
         // Systems
         .add_systems(Startup, setup)
         .add_systems(PreUpdate, camera_control)
+        .add_systems(PreUpdate, update_cursor_pos)
         // Game plugins
         .add_plugins(MapGenerationPlugin)
         .add_plugins(UnitsUiPlugin {
@@ -73,6 +75,24 @@ fn main() {
     }
 
     app.run();
+}
+
+// We need to keep the cursor position updated based on any `CursorMoved` events.
+pub fn update_cursor_pos(
+    camera_q: Query<(&GlobalTransform, &Camera)>,
+    mut cursor_moved_events: EventReader<CursorMoved>,
+    mut cursor_pos: ResMut<CursorPos>,
+) {
+    for cursor_moved in cursor_moved_events.read() {
+        // To get the mouse's world position, we have to transform its window position by
+        // any transforms on the camera. This is done by projecting the cursor position into
+        // camera space (world space).
+        for (cam_t, cam) in camera_q.iter() {
+            if let Some(pos) = cam.viewport_to_world_2d(cam_t, cursor_moved.position) {
+                *cursor_pos = CursorPos(pos);
+            }
+        }
+    }
 }
 
 fn setup(

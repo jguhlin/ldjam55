@@ -73,15 +73,6 @@ fn spawn_player_tower(
         y: player_tower_location.1 as u32,
     };
 
-    // 1 below tower
-    let spawn_point = TilePos {
-        x: player_tower_location.0 as u32,
-        y: player_tower_location.1 as u32 - 1,
-    };
-
-    let world_pos = spawn_point.center_in_world(&TilemapGridSize { x: 1000.0, y: 1000.0 }, &TilemapType::Square);
-    state.player_tower_location_worldpsace = world_pos;
-
     let tile_entity = commands
         .spawn((
             TileBundle {

@@ -10,9 +10,11 @@ pub use xxhash_rust::xxh3::xxh3_64;
 
 pub mod map;
 pub mod ui;
+pub mod units;
 
 pub use map::*;
 pub use ui::*;
+pub use units::*;
 
 #[derive(States, Default, Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Game {
@@ -50,7 +52,6 @@ pub struct TreasureLocs {
 #[derive(Resource)]
 pub struct GameState {
     pub player_tower_location: (u32, u32),
-    pub player_tower_location_worldpsace: Vec2,
     pub enemy_tower_locations: Vec<(u32, u32)>,
     pub map: NoiseMap,
     pub score: u64,
@@ -61,7 +62,6 @@ impl Default for GameState {
     fn default() -> Self {
         Self {
             player_tower_location: (0, 0),
-            player_tower_location_worldpsace: Vec2::ZERO,
             enemy_tower_locations: vec![],
             map: NoiseMap::default(),
             score: 0,
@@ -90,7 +90,7 @@ pub struct Unit {
     pub overworld_speed: u32,
     pub excavation_speed: u32,
     pub battle_speed: u32,
-    pub members: u32, 
+    pub members: u32,
     // todo: damage, health regen, attack types, etc...
 }
 
@@ -132,7 +132,6 @@ pub struct GameAssets {
     pub tiles_layout: Handle<TextureAtlasLayout>,
     pub icons: Icons,
     pub font: Handle<Font>,
-
 }
 
 #[derive(Default)]
@@ -153,4 +152,14 @@ pub enum UnitType {
     Scout,
     Excavation,
     Attack,
+}
+
+#[derive(Resource)]
+pub struct CursorPos(pub Vec2);
+impl Default for CursorPos {
+    fn default() -> Self {
+        // Initialize the cursor pos at some far away place. It will get updated
+        // correctly when the cursor moves.
+        Self(Vec2::new(-1000.0, -1000.0))
+    }
 }

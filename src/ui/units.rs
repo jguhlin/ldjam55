@@ -1,4 +1,5 @@
 use bevy::prelude::*;
+use bevy_ecs_tilemap::prelude::*;
 
 use crate::*;
 
@@ -54,6 +55,7 @@ fn add_unit_confirm(
     mut game_state: ResMut<GameState>,
     query: Query<(Entity, &AddUnitMenu)>,
     assets: Res<GameAssets>,
+    tilemap_q: Query<(&Transform, &TilemapType, &TilemapGridSize, &TileStorage), With<MapStuff>>,
 ) {
     // Despawn the menu
     for (e, AddUnitMenu) in query.iter() {
@@ -61,40 +63,47 @@ fn add_unit_confirm(
         commands.entity(e).despawn_recursive();
     }
 
+    let (map_transform, map_type, grid_size, tilemap_storage) = tilemap_q.single();
+
     // Get event data
     for AddUnitConfirm { slot, unit } in ev_addunitconfirm.read() {
-
         let unit = match unit {
             UnitType::Scout => Unit::scout(),
             UnitType::Excavation => Unit::excavation(),
             UnitType::Attack => Unit::attack(),
         };
 
-        let transform = game_state.player_tower_location_worldpsace;
-        let transform = Transform::from_translation(Vec3::new(transform.x, transform.y, 1.0));
+        let mut spawn_pos = game_state.player_tower_location;
+        // 1 below the player tower
+        spawn_pos.1 -= 1;
+        let spawn_pos = TilePos { x: spawn_pos.0 as u32, y: spawn_pos.1 as u32 };
+        let spawn_pos = spawn_pos.center_in_world(grid_size, map_type).extend(3.5);
+        let transform = *map_transform * Transform::from_translation(spawn_pos);
 
-        let id = commands.spawn((
-            Name::from(format!("Unit {}", slot)),
-            unit,
-            SpriteSheetBundle {
-                texture: assets.tiles.clone(),
-                atlas: TextureAtlas {
-                    layout: assets.tiles_layout.clone(),
-                    index: 8,
+        log::info!("Spawning unit at {:?} because of pos {:?}", transform, game_state.player_tower_location);
+
+        let id = commands
+            .spawn((
+                Name::from(format!("Unit {}", slot)),
+                unit,
+                SpriteSheetBundle {
+                    texture: assets.tiles.clone(),
+                    atlas: TextureAtlas {
+                        layout: assets.tiles_layout.clone(),
+                        index: 8,
+                    },
+                    // Place right below the player tower
+                    transform,
+                    ..default()
                 },
-                // Place right below the player tower
-                transform,
-                ..default()
-            },
-        )).id();
+            ))
+            .id();
 
         log::info!("Spawned at {:?} with id {:?}", transform, id);
 
         // Update the game state
         game_state.units[*slot as usize] = UnitEntry::Summoned(id);
-    
     }
-
 }
 
 fn add_unit(
