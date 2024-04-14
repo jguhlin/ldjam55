@@ -1,4 +1,5 @@
 use bevy::prelude::*;
+use bevy::ui::FocusPolicy;
 use bevy_ecs_tilemap::prelude::*;
 
 use crate::*;
@@ -104,6 +105,11 @@ fn add_unit_confirm(
                     ..default()
                 },
                 UnitUninitialized,
+                Slot { slot: *slot },
+                TilePos {
+                    x: spawn_pos.x as u32,
+                    y: spawn_pos.y as u32,
+                },
             ))
             .id();
 
@@ -127,6 +133,8 @@ fn add_unit(
     query: Query<(Entity, &AddUnitButton, &Button)>,
     assets: Res<GameAssets>,
 ) {
+    commands.insert_resource(MenuOpen);
+
     for (_e, AddUnitButton(unit), button) in query.iter() {
         commands.insert_resource(AddingUnit { slot: *unit });
 
@@ -180,6 +188,7 @@ fn add_unit(
                                 ButtonBundle {
                                     style: button_style.clone(),
                                     background_color: NORMAL_BUTTON.into(),
+                                    focus_policy: FocusPolicy::Block,
                                     ..default()
                                 },
                                 AddScoutUnitButton,
@@ -196,6 +205,7 @@ fn add_unit(
                                 ButtonBundle {
                                     style: button_style.clone(),
                                     background_color: NORMAL_BUTTON.into(),
+                                    focus_policy: FocusPolicy::Block,
                                     ..default()
                                 },
                                 AddExcavationUnitButton,
@@ -212,6 +222,7 @@ fn add_unit(
                                 ButtonBundle {
                                     style: button_style.clone(),
                                     background_color: NORMAL_BUTTON.into(),
+                                    focus_policy: FocusPolicy::Block,
                                     ..default()
                                 },
                                 AddAttackUnitButton,
@@ -250,11 +261,14 @@ const HOVERED_BUTTON: Color = Color::rgba(1.0, 1.0, 1.0, 1.0);
 const PRESSED_BUTTON: Color = Color::rgb(0.35, 0.75, 0.35);
 
 fn interaction(
+    mut commands: Commands,
     mut interaction_query: Query<
         (
             Entity,
             &Interaction,
             &mut BackgroundColor,
+            &mut Style,
+            &mut BorderColor,
             Option<&GoToTowerButton>,
             Option<&DefenseArmyButton>,
             Option<&AddUnitButton>,
@@ -275,6 +289,8 @@ fn interaction(
         e,
         interaction,
         mut bg,
+        mut style,
+        mut border_color,
         go_to_tower,
         defense_army,
         add_unit,
@@ -299,11 +315,13 @@ fn interaction(
         if go_to_tower.is_some() && *interaction == Interaction::Pressed {
             ev_gototower.send(GoToTowerEvent);
             selected_unit.unit = None;
+            style.border = UiRect::all(Val::ZERO);
         }
 
         if add_unit.is_some() && *interaction == Interaction::Pressed {
             ev_addunit.send(AddUnitEvent);
             selected_unit.unit = None;
+            style.border = UiRect::all(Val::ZERO);
         }
 
         if add_scout.as_ref().is_some() && *interaction == Interaction::Pressed {
@@ -315,6 +333,7 @@ fn interaction(
                 });
                 selected_unit.unit = None;
             }
+            style.border = UiRect::all(Val::ZERO);
         }
 
         if add_excavation.as_ref().is_some() && *interaction == Interaction::Pressed {
@@ -326,6 +345,7 @@ fn interaction(
                 });
                 selected_unit.unit = None;
             }
+            style.border = UiRect::all(Val::ZERO);
         }
 
         if add_attack.as_ref().is_some() && *interaction == Interaction::Pressed {
@@ -337,11 +357,13 @@ fn interaction(
                 });
                 selected_unit.unit = None;
             }
+            style.border = UiRect::all(Val::ZERO);
         }
 
         if slot.as_ref().is_some() && *interaction == Interaction::Pressed {
             let slot = slot.unwrap().slot;
             selected_unit.unit = Some(slot);
+            style.border = UiRect::all(Val::Px(4.0));
         }
     }
 }
@@ -357,7 +379,6 @@ fn setup_units_bar(mut commands: Commands, assets: Res<GameAssets>, game_state: 
                     flex_direction: FlexDirection::Column,
                     align_content: AlignContent::Center,
                     align_items: AlignItems::Center,
-
                     ..default()
                 },
                 ..default()
@@ -405,6 +426,7 @@ fn setup_units_bar(mut commands: Commands, assets: Res<GameAssets>, game_state: 
                         ButtonBundle {
                             style: style.clone(),
                             image: UiImage::new(assets.icons.tower.clone()),
+                            focus_policy: FocusPolicy::Block,
                             ..default()
                         },
                         GoToTowerButton,
@@ -414,6 +436,7 @@ fn setup_units_bar(mut commands: Commands, assets: Res<GameAssets>, game_state: 
                         ButtonBundle {
                             style: style.clone(),
                             image: UiImage::new(assets.icons.shield.clone()),
+                            focus_policy: FocusPolicy::Block,
                             ..default()
                         },
                         DefenseArmyButton,
@@ -429,6 +452,7 @@ fn setup_units_bar(mut commands: Commands, assets: Res<GameAssets>, game_state: 
                             ButtonBundle {
                                 style: style.clone(),
                                 image: UiImage::new(image),
+                                focus_policy: FocusPolicy::Block,
                                 ..default()
                             },
                             Slot { slot: n as u8 },

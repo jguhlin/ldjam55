@@ -63,6 +63,8 @@ fn spawn_player_tower(
     mut state: ResMut<GameState>,
     mut q: Query<(Entity, &MapStuff, &mut TileStorage), Without<MapFogOfWar>>,
     mut fog_q: Query<(&MapFogOfWar, &TileStorage), Without<MapStuff>>,
+    mut tile_query: Query<&mut TileVisible>,
+
 ) {
     let player_tower_location = state.player_tower_location;
 
@@ -97,7 +99,8 @@ fn spawn_player_tower(
             };
             let tile_entity = fog_tile_storage.get(&tile_pos);
             if let Some(tile_entity) = tile_entity {
-                commands.entity(tile_entity).despawn();
+                let mut visibility = tile_query.get_mut(tile_entity).unwrap();
+                visibility.0 = false;
             }
         }
     }
@@ -172,6 +175,8 @@ fn draw_map(mut commands: Commands, assets: Res<GameAssets>, state: Res<GameStat
                     position: tile_pos,
                     tilemap_id: TilemapId(tilemap_entity),
                     texture_index: TileTextureIndex(7),
+                    // Turn off fog of war by uncommenting this! easy peasy
+                    // visible: TileVisible(false),
                     ..Default::default()
                 })
                 .id();
@@ -214,12 +219,12 @@ fn create_map(seed: u32) -> NoiseMap {
     // Average value should be between 0.3 and 0.7
     // Scale the map so that the average value is 0.5
     if avg < 0.3 || avg > 0.7 {
-        let diff = 0.5 - avg;
+        let diff = (avg/0.3).min(avg/0.7);
 
         for x in 0..1000 {
             for y in 0..1000 {
                 let val = noise_map.get_value(x, y);
-                noise_map.set_value(x, y, val + diff);
+                noise_map.set_value(x, y, val * diff);
             }
         }
     }

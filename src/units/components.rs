@@ -1,4 +1,4 @@
-use bevy::prelude::{Component, Entity, Handle, Image};
+use bevy::prelude::{Component, Deref, DerefMut, Entity, Handle, Image, Vec2};
 
 use crate::GameAssets;
 
@@ -89,3 +89,9 @@ impl UnitType {
 
 #[derive(Component)]
 pub struct UnitVisual;
+
+#[derive(Component)]
+pub struct UnitDirection {
+    pub direction: Vec2,
+    pub destination: Vec2,
+}

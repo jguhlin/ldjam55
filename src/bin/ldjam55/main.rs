@@ -93,7 +93,7 @@ pub fn update_cursor_pos(
         // camera space (world space).
         for (cam_t, cam) in camera_q.iter() {
             if let Some(pos) = cam.viewport_to_world_2d(cam_t, cursor_moved.position) {
-                *cursor_pos = CursorPos(pos);
+                cursor_pos.mouse_position = pos;
             }
         }
     }

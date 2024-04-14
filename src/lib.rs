@@ -2,6 +2,7 @@
 #![feature(trivial_bounds)]
 
 pub use bevy::prelude::*;
+pub use bevy_ecs_tilemap::prelude::*;
 pub use bevy_prng::WyRand;
 pub use bevy_rand::prelude::{EntropyComponent, EntropyPlugin, ForkableRng, GlobalEntropy};
 pub use noise::utils::NoiseMap;
@@ -106,12 +107,21 @@ impl Default for GameConfig {
 }
 
 #[derive(Resource)]
-pub struct CursorPos(pub Vec2);
+pub struct CursorPos {
+    pub mouse_position: Vec2,
+    pub tile_position: TilePos,
+    pub tile_position_real: Vec2,
+}
+
 impl Default for CursorPos {
     fn default() -> Self {
         // Initialize the cursor pos at some far away place. It will get updated
         // correctly when the cursor moves.
-        Self(Vec2::new(-1000.0, -1000.0))
+        Self {
+            mouse_position: Vec2::new(-1000.0, -1000.0),
+            tile_position: TilePos::default(),
+            tile_position_real: Vec2::new(-1000.0, -1000.0),
+        }
     }
 }
 
@@ -119,3 +129,6 @@ impl Default for CursorPos {
 pub struct SelectedUnit {
     pub unit: Option<u8>, // slot
 }
+
+#[derive(Resource)]
+pub struct MenuOpen;
