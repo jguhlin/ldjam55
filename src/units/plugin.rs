@@ -23,8 +23,7 @@ impl<S: States> Plugin for UnitsPlugin<S> {
             .add_systems(
                 Update,
                 units_fog_of_war.run_if(in_state(self.state.clone())),
-            )
-            ;
+            );
     }
 }
 
@@ -114,17 +113,20 @@ pub const MOVEMENT_SPEED_SCALE: f32 = 20.0;
 
 fn move_units(
     mut commands: Commands,
-    mut query: Query<(Entity, &mut Transform, &Unit, &UnitDirection)>,
+    mut query: Query<(Entity, &mut Transform, &Unit, &mut UnitDirection)>,
     time: Res<Time>,
 ) {
-    for (e, mut transform, unit, direction) in query.iter_mut() {
-        if transform.translation.xy() == direction.destination {
+    for (e, mut transform, unit, mut unit_direction) in query.iter_mut() {
+        let direction = unit_direction.destination - transform.translation.xy();
+        unit_direction.direction = direction.normalize();
+
+        if transform.translation.xy() == unit_direction.destination {
             commands.entity(e).remove::<UnitDirection>();
         } else {
             transform.translation.x +=
-                direction.direction.x * unit.overworld_speed as f32 * time.delta_seconds() * MOVEMENT_SPEED_SCALE;
+            unit_direction.direction.x * unit.overworld_speed as f32 * time.delta_seconds() * MOVEMENT_SPEED_SCALE;
             transform.translation.y +=
-                direction.direction.y * unit.overworld_speed as f32 * time.delta_seconds() * MOVEMENT_SPEED_SCALE;
+            unit_direction.direction.y * unit.overworld_speed as f32 * time.delta_seconds() * MOVEMENT_SPEED_SCALE;
         }
     }
 }

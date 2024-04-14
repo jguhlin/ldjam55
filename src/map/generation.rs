@@ -12,6 +12,9 @@ use crate::*;
 #[derive(Event)]
 pub struct GoToTowerEvent;
 
+#[derive(Component)]
+pub struct TreasureMarker;
+
 pub struct MapGenerationPlugin;
 
 impl Plugin for MapGenerationPlugin {
@@ -24,6 +27,7 @@ impl Plugin for MapGenerationPlugin {
                 place_towers,
                 draw_map,
                 spawn_player_tower,
+                spawn_treasure_markers,
                 center_camera_on_player_tower,
             )
                 .chain(),
@@ -88,11 +92,12 @@ fn spawn_player_tower(
         .id();
     tile_storage.set(&tile_pos, tile_entity);
 
-    // Clear out a radius of 6 around the player tower
+    // Clear out a radius of x around the player tower
     // todo make circular
+    let clear_radius = 20;
     let (_map_fog_of_war, fog_tile_storage) = fog_q.single_mut();
-    for x in (player_tower_location.0 as i32 - 6)..=(player_tower_location.0 as i32 + 6) {
-        for y in (player_tower_location.1 as i32 - 6)..=(player_tower_location.1 as i32 + 6) {
+    for x in (player_tower_location.0 as i32 - clear_radius)..=(player_tower_location.0 as i32 + clear_radius) {
+        for y in (player_tower_location.1 as i32 - clear_radius)..=(player_tower_location.1 as i32 + clear_radius) {
             let tile_pos = TilePos {
                 x: x as u32,
                 y: y as u32,
@@ -104,6 +109,35 @@ fn spawn_player_tower(
             }
         }
     }
+}
+
+fn spawn_treasure_markers(
+    mut commands: Commands,
+    mut state: ResMut<GameState>,
+    mut q: Query<(Entity, &MapStuff, &mut TileStorage)>,
+    treasure_locs: Res<TreasureLocs>,
+) {
+
+    let (e, _map_stuff, mut tile_storage) = q.single_mut();
+
+    for (x, y) in treasure_locs.locs.iter() {
+        // No tile exists, need a new tile bundle
+        let tile_pos = TilePos { x: *x, y: *y };
+
+        let tile_entity = commands
+            .spawn((
+                TileBundle {
+                    position: tile_pos,
+                    tilemap_id: TilemapId(e),
+                    texture_index: TileTextureIndex(12),
+                    ..Default::default()
+                },
+                TreasureMarker,
+            ))
+            .id();
+        tile_storage.set(&tile_pos, tile_entity);
+    }
+
 }
 
 fn draw_map(mut commands: Commands, assets: Res<GameAssets>, state: Res<GameState>) {
