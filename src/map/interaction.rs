@@ -14,11 +14,37 @@ pub struct MapInteractionPlugin<S: States> {
 #[derive(Event)]
 pub struct MapClick(pub Vec2);
 
+#[derive(Event, Deref, DerefMut)]
+pub struct CenterCamera {
+    pub loc: TilePos,
+}
+
 impl<S: States> Plugin for MapInteractionPlugin<S> {
     fn build(&self, app: &mut App) {
-        app.add_event::<MapClick>()
-            .add_systems(PreUpdate, map_click.run_if(in_state(self.state.clone())));
+        app.add_event::<CenterCamera>()
+            .add_event::<MapClick>()
+            .add_systems(PreUpdate, map_click.run_if(in_state(self.state.clone())))
+            .add_systems(PreUpdate, center_camera.run_if(on_event::<CenterCamera>()));
     }
+}
+
+fn center_camera(
+    mut query: Query<&mut Transform, With<Camera>>,
+    mut ev_centercamera: EventReader<CenterCamera>,
+) {
+    let mut camera_transform = query.single_mut();
+    let event = ev_centercamera.read().next().unwrap();
+
+    // Map is centered at 0, 0 and size is 1000, 1000
+    // tile sizes are 32x32
+
+    let player_tower_x = event.x;
+    let player_tower_y = event.y;
+
+    let x = player_tower_x as f32 * 32.0;
+    let y = player_tower_y as f32 * 32.0;
+    // Map is centered, so subtract
+    camera_transform.translation = Vec3::new(x - 500.0 * 32.0, y - 500.0 * 32.0, 10.0);
 }
 
 fn map_click(
@@ -33,11 +59,7 @@ fn map_click(
     )>,
     mouse_button_input: Res<ButtonInput<MouseButton>>,
     q_windows: Query<&Window, With<PrimaryWindow>>,
-    
 ) {
-
-
-
     let window = q_windows.single();
     if let Some(position) = q_windows.single().cursor_position() {
         // Get window size

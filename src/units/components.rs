@@ -15,37 +15,48 @@ pub enum UnitEntry {
 #[derive(Component)]
 pub struct Unit {
     pub unit_type: UnitType,
-    pub health_per_unit: u32,
-    pub overworld_speed: u32,
-    pub excavation_speed: u32,
-    pub battle_speed: u32,
-    pub members: u32,
+    pub health_per_member: u8,
+    pub overworld_speed: u8,
+    pub excavation_speed: u8,
+    pub battle_speed: u8,
+    pub members: u8,
+    pub visibility: u8, // How much fog of war can be seen
 
     pub total_health: f32,
+    pub current_health: f32,
     // todo: damage, health regen, attack types, etc...
 }
 
 impl Unit {
     pub fn scout() -> Self {
         Self {
-            unit_type: UnitType::Scout,
-            health_per_unit: 50,
-            overworld_speed: 20,
-            excavation_speed: 10,
-            battle_speed: 10,
             members: 1,
+            unit_type: UnitType::Scout,
+            health_per_member: 50,
             total_health: 50.0,
+            current_health: 50.0,
+
+            overworld_speed: 20,
+            excavation_speed: 6,
+            battle_speed: 10,
+
+            visibility: 8,
         }
     }
     pub fn excavation() -> Self {
         Self {
+            members: 2,
+            health_per_member: 75,
+            total_health: 150.0,
+            current_health: 150.0,
+
             unit_type: UnitType::Excavation,
-            health_per_unit: 75,
-            overworld_speed: 10,
+
+            overworld_speed: 8,
             excavation_speed: 20,
             battle_speed: 4,
-            members: 2,
-            total_health: 150.0,
+
+            visibility: 3,
         }
     }
 
@@ -53,12 +64,18 @@ impl Unit {
     pub fn attack() -> Self {
         Self {
             unit_type: UnitType::Attack,
-            health_per_unit: 70,
+
+            members: 3,
+            health_per_member: 60,
+            total_health: 180.0,
+            current_health: 180.0,
+
             overworld_speed: 10,
-            excavation_speed: 1,
+
+            excavation_speed: 2,
             battle_speed: 10,
-            members: 2,
-            total_health: 140.0,
+
+            visibility: 5,
         }
     }
 }

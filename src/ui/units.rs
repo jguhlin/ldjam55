@@ -13,21 +13,42 @@ pub struct UnitsUiPlugin<S: States> {
 
 impl<S: States> Plugin for UnitsUiPlugin<S> {
     fn build(&self, app: &mut App) {
-        app.add_event::<AddUnitEvent>()
-            .add_event::<AddUnitConfirm>();
-        app.add_systems(OnEnter(self.state.clone()), setup_units_bar)
+        app.add_event::<GoToUnit>()
+            .add_event::<AddUnitEvent>()
+            .add_event::<AddUnitConfirm>()
+            .add_systems(OnEnter(self.state.clone()), setup_units_bar)
             .add_systems(Update, interaction.run_if(in_state(self.state.clone())))
             .add_systems(Update, add_unit.run_if(on_event::<AddUnitEvent>()))
             .add_systems(
                 Update,
                 add_unit_confirm.run_if(on_event::<AddUnitConfirm>()),
-            );
+            )
+            .add_systems(Update, go_to_unit.run_if(on_event::<GoToUnit>()));
+    }
+}
+
+fn go_to_unit(
+    mut ev_gotounit: EventReader<GoToUnit>,
+    mut ev_centercamera: EventWriter<CenterCamera>,
+    q: Query<(&TilePos, &Slot), With<Unit>>,
+) {
+    for GoToUnit { slot } in ev_gotounit.read() {
+        for (tile_pos, unit_slot) in q.iter() {
+            if *slot == unit_slot.slot {
+                ev_centercamera.send(CenterCamera { loc: *tile_pos });
+            }
+        }
     }
 }
 
 #[derive(Component, Deref, DerefMut, PartialEq, Eq)]
 pub struct Slot {
     #[deref]
+    pub slot: u8,
+}
+
+#[derive(Event)]
+pub struct GoToUnit {
     pub slot: u8,
 }
 
@@ -64,8 +85,9 @@ fn add_unit_confirm(
     assets: Res<GameAssets>,
     tilemap_q: Query<(&Transform, &TilemapType, &TilemapGridSize, &TileStorage), With<MapStuff>>,
     mut ev_addunitcomplete: EventWriter<AddUnitComplete>,
-
+    mut selected_unit: ResMut<SelectedUnit>,
     mut button_query: Query<(Entity, &Slot, &Button, &UiImage)>,
+    mut ev_centercamera: EventWriter<CenterCamera>,
 ) {
     // Despawn the menu
     for (e, AddUnitMenu) in query.iter() {
@@ -91,6 +113,11 @@ fn add_unit_confirm(
             x: spawn_pos.0 as u32,
             y: spawn_pos.1 as u32,
         };
+
+        ev_centercamera.send(CenterCamera {
+            loc: spawn_pos.clone(),
+        });
+
         let spawn_pos = spawn_pos.center_in_world(grid_size, map_type).extend(3.5);
         let transform = *map_transform * Transform::from_translation(spawn_pos);
 
@@ -115,6 +142,8 @@ fn add_unit_confirm(
 
         // Update the game state
         game_state.units[*slot as usize] = UnitEntry::Summoned(id);
+
+        selected_unit.unit = Some(*slot);
 
         // Update the button
         for (e, button_slot, _button, _image) in button_query.iter_mut() {
@@ -284,6 +313,7 @@ fn interaction(
     mut ev_addunitconfirm: EventWriter<AddUnitConfirm>,
     adding_unit: Option<Res<AddingUnit>>,
     mut selected_unit: ResMut<SelectedUnit>,
+    mut ev_gotounit: EventWriter<GoToUnit>,
 ) {
     for (
         e,
@@ -364,6 +394,7 @@ fn interaction(
             let slot = slot.unwrap().slot;
             selected_unit.unit = Some(slot);
             style.border = UiRect::all(Val::Px(4.0));
+            ev_gotounit.send(GoToUnit { slot });
         }
     }
 }

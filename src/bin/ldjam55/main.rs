@@ -65,7 +65,8 @@ fn main() {
         })
         .add_plugins(MapInteractionPlugin {
             state: Game::Playing,
-        });
+        })
+        .add_plugins(TreasureGenerationPlugin);
 
     #[cfg(debug_assertions)]
     {

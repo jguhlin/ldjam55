@@ -10,10 +10,12 @@ pub use rand::prelude::{IteratorRandom, Rng};
 pub use xxhash_rust::xxh3::xxh3_64;
 
 pub mod map;
+pub mod treasures;
 pub mod ui;
 pub mod units;
 
 pub use map::*;
+pub use treasures::*;
 pub use ui::*;
 pub use units::*;
 
@@ -48,6 +50,7 @@ pub struct PlayerTower;
 #[derive(Resource)]
 pub struct TreasureLocs {
     pub locs: Vec<(u32, u32)>,
+    pub treasures: Vec<Treasure>,
 }
 
 #[derive(Resource)]
@@ -102,7 +105,7 @@ pub struct Icons {
 
 impl Default for GameConfig {
     fn default() -> Self {
-        Self { seed: 2547909 }
+        Self { seed: 564139019 }
     }
 }
 

@@ -40,9 +40,8 @@ impl Plugin for MapGenerationPlugin {
 }
 
 fn center_camera_on_player_tower(
-    state: Res<GameState>,
     mut query: Query<&mut Transform, With<Camera>>,
-    mut q2: Query<&TilePos, (With<PlayerTower>, Without<Camera>)>,
+    q2: Query<&TilePos, (With<PlayerTower>, Without<Camera>)>,
     mut game: ResMut<NextState<Game>>,
 ) {
     game.set(Game::Playing);
@@ -64,11 +63,10 @@ fn center_camera_on_player_tower(
 
 fn spawn_player_tower(
     mut commands: Commands,
-    mut state: ResMut<GameState>,
+    state: Res<GameState>,
     mut q: Query<(Entity, &MapStuff, &mut TileStorage), Without<MapFogOfWar>>,
     mut fog_q: Query<(&MapFogOfWar, &TileStorage), Without<MapStuff>>,
     mut tile_query: Query<&mut TileVisible>,
-
 ) {
     let player_tower_location = state.player_tower_location;
 
@@ -96,8 +94,12 @@ fn spawn_player_tower(
     // todo make circular
     let clear_radius = 20;
     let (_map_fog_of_war, fog_tile_storage) = fog_q.single_mut();
-    for x in (player_tower_location.0 as i32 - clear_radius)..=(player_tower_location.0 as i32 + clear_radius) {
-        for y in (player_tower_location.1 as i32 - clear_radius)..=(player_tower_location.1 as i32 + clear_radius) {
+    for x in (player_tower_location.0 as i32 - clear_radius)
+        ..=(player_tower_location.0 as i32 + clear_radius)
+    {
+        for y in (player_tower_location.1 as i32 - clear_radius)
+            ..=(player_tower_location.1 as i32 + clear_radius)
+        {
             let tile_pos = TilePos {
                 x: x as u32,
                 y: y as u32,
@@ -117,7 +119,6 @@ fn spawn_treasure_markers(
     mut q: Query<(Entity, &MapStuff, &mut TileStorage)>,
     treasure_locs: Res<TreasureLocs>,
 ) {
-
     let (e, _map_stuff, mut tile_storage) = q.single_mut();
 
     for (x, y) in treasure_locs.locs.iter() {
@@ -137,7 +138,6 @@ fn spawn_treasure_markers(
             .id();
         tile_storage.set(&tile_pos, tile_entity);
     }
-
 }
 
 fn draw_map(mut commands: Commands, assets: Res<GameAssets>, state: Res<GameState>) {
@@ -253,7 +253,7 @@ fn create_map(seed: u32) -> NoiseMap {
     // Average value should be between 0.3 and 0.7
     // Scale the map so that the average value is 0.5
     if avg < 0.3 || avg > 0.7 {
-        let diff = (avg/0.3).min(avg/0.7);
+        let diff = (avg / 0.3).min(avg / 0.7);
 
         for x in 0..1000 {
             for y in 0..1000 {
@@ -433,6 +433,7 @@ fn generate_world(
     let treasure_spots = create_treasure_spots(config.seed);
     commands.insert_resource(TreasureLocs {
         locs: treasure_spots,
+        treasures: vec![],
     });
 
     gamestate.map = map;

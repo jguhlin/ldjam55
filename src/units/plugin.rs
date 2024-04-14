@@ -12,7 +12,10 @@ impl<S: States> Plugin for UnitsPlugin<S> {
     fn build(&self, app: &mut App) {
         app.add_event::<AddUnitComplete>()
             // .add_systems(OnEnter(self.state.clone()), setup_units_bar)
-            .add_systems(PostUpdate, spawn_sprites.run_if(on_event::<AddUnitComplete>()))
+            .add_systems(
+                PostUpdate,
+                spawn_sprites.run_if(on_event::<AddUnitComplete>()),
+            )
             .add_systems(
                 PreUpdate,
                 (prevent_collision, jitter_units).run_if(in_state(self.state.clone())),
@@ -56,18 +59,19 @@ fn update_unit_pos(
 }
 
 fn units_fog_of_war(
-    mut commands: Commands,
-    q: Query<(Entity, &TilePos, &Transform, &Unit, &UnitDirection)>,
-    mut fog_q: Query<(&MapFogOfWar, &TileStorage), Without<MapStuff>>,
+    q: Query<(Entity, &TilePos, &Unit, &UnitDirection)>,
+    fog_q: Query<(&MapFogOfWar, &TileStorage), Without<MapStuff>>,
     mut tile_query: Query<&mut TileVisible>,
 ) {
     // Clear out a radius of 6 around moving units
     // todo make circular
     let (_map_fog_of_war, fog_tile_storage) = fog_q.single();
 
-    for (e, unit_tile_pos, _, _, _) in q.iter() {
-        for x in (unit_tile_pos.x as i32 - 6)..=(unit_tile_pos.x as i32 + 6) {
-            for y in (unit_tile_pos.y as i32 - 6)..=(unit_tile_pos.y as i32 + 6) {
+    for (_e, unit_tile_pos, unit, _) in q.iter() {
+        let radius = unit.visibility as i32;
+
+        for x in (unit_tile_pos.x as i32 - radius)..=(unit_tile_pos.x as i32 + radius) {
+            for y in (unit_tile_pos.y as i32 - radius)..=(unit_tile_pos.y as i32 + radius) {
                 let tile_pos = TilePos {
                     x: x as u32,
                     y: y as u32,
@@ -80,6 +84,7 @@ fn units_fog_of_war(
         }
     }
 }
+
 // Need to give the unit a direction, then act on it later...
 fn set_direction(
     mut commands: Commands,
@@ -123,10 +128,14 @@ fn move_units(
         if transform.translation.xy() == unit_direction.destination {
             commands.entity(e).remove::<UnitDirection>();
         } else {
-            transform.translation.x +=
-            unit_direction.direction.x * unit.overworld_speed as f32 * time.delta_seconds() * MOVEMENT_SPEED_SCALE;
-            transform.translation.y +=
-            unit_direction.direction.y * unit.overworld_speed as f32 * time.delta_seconds() * MOVEMENT_SPEED_SCALE;
+            transform.translation.x += unit_direction.direction.x
+                * unit.overworld_speed as f32
+                * time.delta_seconds()
+                * MOVEMENT_SPEED_SCALE;
+            transform.translation.y += unit_direction.direction.y
+                * unit.overworld_speed as f32
+                * time.delta_seconds()
+                * MOVEMENT_SPEED_SCALE;
         }
     }
 }

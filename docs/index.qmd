@@ -24,4 +24,7 @@ title: "ldjam55"
 [x] Make rng seed and map seed separate so that map can be predictable at least...
 [x] Others things we want predictable can be an addition to the seed and a hash as a shortcut...
 [ ] Visual or textual representation of which unit is under current control
-[ ] Give scout extra fog of war clearing
+[x] Give scout extra fog of war clearing
+[x] Click unit and center on unit
+[ ] Defense Army
+[ ] Elemental Summons
