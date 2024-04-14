@@ -11,9 +11,196 @@ pub struct UnitsUiPlugin<S: States> {
 
 impl<S: States> Plugin for UnitsUiPlugin<S> {
     fn build(&self, app: &mut App) {
-        app.add_event::<AddUnitEvent>();
+        app.add_event::<AddUnitEvent>()
+            .add_event::<AddUnitConfirm>();
         app.add_systems(OnEnter(self.state.clone()), setup_units_bar)
-            .add_systems(Update, interaction.run_if(in_state(self.state.clone())));
+            .add_systems(Update, interaction.run_if(in_state(self.state.clone())))
+            .add_systems(Update, add_unit.run_if(on_event::<AddUnitEvent>()))
+            .add_systems(
+                Update,
+                add_unit_confirm.run_if(on_event::<AddUnitConfirm>()),
+            );
+    }
+}
+
+#[derive(Event)]
+pub struct AddUnitConfirm {
+    slot: u8,
+    unit: UnitType,
+}
+
+#[derive(Resource)]
+pub struct AddingUnit {
+    slot: u8,
+}
+
+const TEXT_COLOR: Color = Color::rgb(0.2, 0.2, 0.2);
+
+#[derive(Component)]
+pub struct AddUnitMenu;
+
+#[derive(Component)]
+pub struct AddScoutUnitButton;
+
+#[derive(Component)]
+pub struct AddExcavationUnitButton;
+
+#[derive(Component)]
+pub struct AddAttackUnitButton;
+
+fn add_unit_confirm(
+    mut commands: Commands,
+    mut ev_addunitconfirm: EventReader<AddUnitConfirm>,
+    mut game_state: ResMut<GameState>,
+    query: Query<(Entity, &AddUnitMenu)>,
+    assets: Res<GameAssets>,
+) {
+    // Despawn the menu
+    for (e, AddUnitMenu) in query.iter() {
+        commands.remove_resource::<AddingUnit>();
+        commands.entity(e).despawn_recursive();
+    }
+
+    // Get event data
+    for AddUnitConfirm { slot, unit } in ev_addunitconfirm.read() {
+
+        let unit = match unit {
+            UnitType::Scout => Unit::scout(),
+            UnitType::Excavation => Unit::excavation(),
+            UnitType::Attack => Unit::attack(),
+        };
+
+        let transform = game_state.player_tower_location_worldpsace;
+        let transform = Transform::from_translation(Vec3::new(transform.x, transform.y, 1.0));
+
+        let id = commands.spawn((
+            Name::from(format!("Unit {}", slot)),
+            unit,
+            SpriteSheetBundle {
+                texture: assets.tiles.clone(),
+                atlas: TextureAtlas {
+                    layout: assets.tiles_layout.clone(),
+                    index: 8,
+                },
+                // Place right below the player tower
+                transform,
+                ..default()
+            },
+        )).id();
+
+        log::info!("Spawned at {:?} with id {:?}", transform, id);
+
+        // Update the game state
+        game_state.units[*slot as usize] = UnitEntry::Summoned(id);
+    
+    }
+
+}
+
+fn add_unit(
+    mut commands: Commands,
+    ev_addunit: Res<Events<AddUnitEvent>>,
+    mut game_state: ResMut<GameState>,
+    query: Query<(Entity, &AddUnitButton, &Button)>,
+    assets: Res<GameAssets>,
+) {
+    for (e, AddUnitButton(unit), button) in query.iter() {
+        commands.insert_resource(AddingUnit { slot: *unit });
+
+        // Display a set of buttons to ask what type of unit to summon
+        // Then, when the user clicks on one, we'll send a SummonUnitEvent
+        // Common style for all buttons on the screen
+        let button_style = Style {
+            width: Val::Px(250.0),
+            height: Val::Px(65.0),
+            margin: UiRect::all(Val::Px(20.0)),
+            justify_content: JustifyContent::Center,
+            align_items: AlignItems::Center,
+            ..default()
+        };
+
+        let button_text_style = TextStyle {
+            font_size: 26.0,
+            color: TEXT_COLOR,
+            font: assets.font.clone(),
+            ..default()
+        };
+
+        commands
+            .spawn((
+                NodeBundle {
+                    style: Style {
+                        width: Val::Percent(100.0),
+                        height: Val::Percent(100.0),
+                        align_items: AlignItems::Center,
+                        justify_content: JustifyContent::Center,
+                        ..default()
+                    },
+                    ..default()
+                },
+                AddUnitMenu,
+            ))
+            .with_children(|parent| {
+                parent
+                    .spawn(NodeBundle {
+                        style: Style {
+                            flex_direction: FlexDirection::Column,
+                            align_items: AlignItems::Center,
+                            ..default()
+                        },
+                        background_color: Color::rgba(0.1, 0.1, 0.1, 0.0).into(),
+                        ..default()
+                    })
+                    .with_children(|parent| {
+                        parent
+                            .spawn((
+                                ButtonBundle {
+                                    style: button_style.clone(),
+                                    background_color: NORMAL_BUTTON.into(),
+                                    ..default()
+                                },
+                                AddScoutUnitButton,
+                            ))
+                            .with_children(|parent| {
+                                parent.spawn(TextBundle::from_section(
+                                    "Scout Unit",
+                                    button_text_style.clone(),
+                                ));
+                            });
+
+                        parent
+                            .spawn((
+                                ButtonBundle {
+                                    style: button_style.clone(),
+                                    background_color: NORMAL_BUTTON.into(),
+                                    ..default()
+                                },
+                                AddExcavationUnitButton,
+                            ))
+                            .with_children(|parent| {
+                                parent.spawn(TextBundle::from_section(
+                                    "Excavation Unit",
+                                    button_text_style.clone(),
+                                ));
+                            });
+
+                        parent
+                            .spawn((
+                                ButtonBundle {
+                                    style: button_style.clone(),
+                                    background_color: NORMAL_BUTTON.into(),
+                                    ..default()
+                                },
+                                AddAttackUnitButton,
+                            ))
+                            .with_children(|parent| {
+                                parent.spawn(TextBundle::from_section(
+                                    "Attack Unit",
+                                    button_text_style.clone(),
+                                ));
+                            });
+                    });
+            });
     }
 }
 
@@ -48,14 +235,28 @@ fn interaction(
             Option<&GoToTowerButton>,
             Option<&DefenseArmyButton>,
             Option<&AddUnitButton>,
+            Option<&AddScoutUnitButton>,
+            Option<&AddExcavationUnitButton>,
+            Option<&AddAttackUnitButton>,
         ),
         (Changed<Interaction>, With<Button>),
     >,
     mut ev_gototower: EventWriter<GoToTowerEvent>,
     mut ev_addunit: EventWriter<AddUnitEvent>,
+    mut ev_addunitconfirm: EventWriter<AddUnitConfirm>,
+    adding_unit: Option<Res<AddingUnit>>,
 ) {
-    for (e, interaction, mut bg, go_to_tower, defense_army, add_unit) in
-        interaction_query.iter_mut()
+    for (
+        e,
+        interaction,
+        mut bg,
+        go_to_tower,
+        defense_army,
+        add_unit,
+        add_scout,
+        add_excavation,
+        add_attack,
+    ) in interaction_query.iter_mut()
     {
         match *interaction {
             Interaction::Pressed => {
@@ -71,6 +272,40 @@ fn interaction(
 
         if go_to_tower.is_some() && *interaction == Interaction::Pressed {
             ev_gototower.send(GoToTowerEvent);
+        }
+
+        if add_unit.is_some() && *interaction == Interaction::Pressed {
+            ev_addunit.send(AddUnitEvent);
+        }
+
+        if add_scout.as_ref().is_some() && *interaction == Interaction::Pressed {
+            if adding_unit.as_ref().is_some() {
+                let AddingUnit { slot } = **adding_unit.as_ref().unwrap();
+                ev_addunitconfirm.send(AddUnitConfirm {
+                    slot: slot,
+                    unit: UnitType::Scout,
+                });
+            }
+        }
+
+        if add_excavation.as_ref().is_some() && *interaction == Interaction::Pressed {
+            if adding_unit.as_ref().is_some() {
+                let AddingUnit { slot } = **adding_unit.as_ref().unwrap();
+                ev_addunitconfirm.send(AddUnitConfirm {
+                    slot: slot,
+                    unit: UnitType::Excavation,
+                });
+            }
+        }
+
+        if add_attack.as_ref().is_some() && *interaction == Interaction::Pressed {
+            if adding_unit.as_ref().is_some() {
+                let AddingUnit { slot } = **adding_unit.as_ref().unwrap();
+                ev_addunitconfirm.send(AddUnitConfirm {
+                    slot: slot,
+                    unit: UnitType::Attack,
+                });
+            }
         }
     }
 }

@@ -16,6 +16,9 @@ title: "ldjam55"
 [ ] Protect tower
 [ ] Auto battler
 [ ] Exploration
+[ ] Items give benefits to specific slots (rather than units)
+[ ] Display stats for each unit type, and boons in add menu
+[ ] Display stats for each unit slot when hovering
 
 # TODO
 [x] Make rng seed and map seed separate so that map can be predictable at least...

@@ -60,7 +60,7 @@ fn center_camera_on_player_tower(
 
 fn spawn_player_tower(
     mut commands: Commands,
-    state: Res<GameState>,
+    mut state: ResMut<GameState>,
     mut q: Query<(Entity, &MapStuff, &mut TileStorage), Without<MapFogOfWar>>,
     mut fog_q: Query<(&MapFogOfWar, &TileStorage), Without<MapStuff>>,
 ) {
@@ -72,6 +72,16 @@ fn spawn_player_tower(
         x: player_tower_location.0 as u32,
         y: player_tower_location.1 as u32,
     };
+
+    // 1 below tower
+    let spawn_point = TilePos {
+        x: player_tower_location.0 as u32,
+        y: player_tower_location.1 as u32 - 1,
+    };
+
+    let world_pos = spawn_point.center_in_world(&TilemapGridSize { x: 1000.0, y: 1000.0 }, &TilemapType::Square);
+    state.player_tower_location_worldpsace = world_pos;
+
     let tile_entity = commands
         .spawn((
             TileBundle {
@@ -148,7 +158,7 @@ fn draw_map(mut commands: Commands, assets: Res<GameAssets>, state: Res<GameStat
     let tile_texture_handle = assets.tiles.clone();
     // Spawn the second layer, but it's empty
     let tilemap_entity = commands.spawn(MapStuff).id();
-    let mut tile_storage = TileStorage::empty(map_size);
+    let tile_storage = TileStorage::empty(map_size);
     commands.entity(tilemap_entity).insert((TilemapBundle {
         grid_size,
         map_type,

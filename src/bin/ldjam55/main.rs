@@ -1,4 +1,4 @@
-use bevy::asset::AssetMetaCheck;
+use bevy::{asset::AssetMetaCheck, text};
 use bevy::prelude::*;
 use bevy::window::PrimaryWindow;
 use bevy::winit::WinitWindows;
@@ -80,10 +80,15 @@ fn setup(
     config: Res<GameConfig>,
     mut assets: ResMut<GameAssets>,
     asset_server: Res<AssetServer>,
+    mut game: ResMut<NextState<Game>>,
+    mut texture_atlases: ResMut<Assets<TextureAtlasLayout>>,
 ) {
-    log::info!("Running setup");
     let texture_handle: Handle<Image> = asset_server.load("tiles.png");
+    let layout = TextureAtlasLayout::from_grid(Vec2::new(32.0, 32.0), 12, 1, None, None);
+    let texture_atlas_layout = texture_atlases.add(layout);
     assets.tiles = texture_handle;
+    assets.tiles_layout = texture_atlas_layout;
+    assets.font = asset_server.load("fonts/MonaspaceRadon-Regular.otf");
 
     assets.icons = Icons {
         tower: asset_server.load("icons/tower.png"),
@@ -111,6 +116,8 @@ fn setup(
 
     commands.insert_resource(GlobalEntropy::new(WyRand::new(wyrand::WyRand::new(seed))));
     log::info!("Setup complete");
+
+    game.set(Game::MapGeneration);
 }
 
 fn camera_control(
