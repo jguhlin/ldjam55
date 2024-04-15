@@ -16,7 +16,7 @@ pub enum UnitEntry {
     Summoned(Entity),
 }
 
-#[derive(Component)]
+#[derive(Component, Clone)]
 pub struct Unit {
     pub unit_type: UnitType,
     pub health_per_member: u8,
@@ -89,10 +89,21 @@ impl Unit {
     }
 }
 
+#[derive(Copy, Clone)]
 pub enum UnitType {
     Scout,
     Excavation,
     Attack,
+}
+
+impl std::fmt::Display for UnitType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            UnitType::Scout => write!(f, "Scout"),
+            UnitType::Excavation => write!(f, "Excavation"),
+            UnitType::Attack => write!(f, "Attack"),
+        }
+    }
 }
 
 impl UnitType {

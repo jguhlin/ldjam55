@@ -85,8 +85,13 @@ pub fn dig(
                 .locs
                 .retain(|&x| x != (tile_pos.x, tile_pos.y));
 
-            let treasure_found = gamestate.treasures_found.last().unwrap().clone();
+            let mut treasure_found = gamestate.treasures_found.last().unwrap().clone();
             log::info!("Treasure found: {:?}", treasure_found);
+
+            // If less than 3 treasures found, then it's slot 0
+            if gamestate.treasures_found.len() < 3 {
+                treasure_found.slot = 0;
+            }
 
             if !treasure_found.boons.is_empty() {
                 let mut total_boons = &mut gamestate.unit_boons[treasure_found.slot as usize];

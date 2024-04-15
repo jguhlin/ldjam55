@@ -36,12 +36,15 @@ pub struct UnitInfoPanel;
 #[derive(Component)]
 pub struct DigButton;
 
+#[derive(Component)]
+pub struct UnitPanelUnitStats;
+
 fn unit_panel(
     mut commands: Commands,
     selected_unit: Res<SelectedUnit>,
     game_state: Res<GameState>,
     query: Query<(Entity, &UnitInfoPanel)>,
-    unit_query: Query<(Entity, &Unit, &Slot, &TilePos, Option<&CanDig>)>,
+    unit_query: Query<(Entity, &Unit, &Slot, &TilePos, Option<&CanDig>, Option<&Digging>)>,
     assets: Res<GameAssets>,
     mut dig_button_query: Query<&mut Visibility, With<DigButton>>,
 ) {
@@ -56,11 +59,25 @@ fn unit_panel(
     // Get unit info
     let unit = selected_unit.unit.unwrap();
 
-    if !dig_button_query.is_empty() {
-        let mut dig_button_visibility = dig_button_query.single_mut();
+    let mut text = String::new();
 
-        for (e, u, slot, tilepos, candig) in unit_query.iter() {
-            if slot.slot == unit {
+    let mut unit_data = Unit::scout();
+
+    let mut is_digging = false;
+    let mut digging_progress = 0;
+
+    for (e, u, slot, tilepos, candig, digging) in unit_query.iter() {
+        if slot.slot == unit {
+            unit_data = u.clone();
+
+            if digging.is_some() {
+                is_digging = true;
+                digging_progress = digging.unwrap().progress as u8;
+            }
+
+            if !dig_button_query.is_empty() {
+                let mut dig_button_visibility = dig_button_query.single_mut();
+
                 if candig.is_some() {
                     *dig_button_visibility = Visibility::Visible;
                 } else {
@@ -73,7 +90,7 @@ fn unit_panel(
     // Create panel?
     if query.is_empty() {
         let text_style = TextStyle {
-            font_size: 26.0,
+            font_size: 14.0,
             color: Color::rgba(1., 1., 1., 1.0).into(),
             font: assets.font.clone(),
             ..default()
@@ -109,10 +126,25 @@ fn unit_panel(
                         ..default()
                     })
                     .with_children(|parent| {
-                        parent.spawn((TextBundle {
+                        parent.spawn(TextBundle {
                             text: Text::from_section("Unit Info", text_style.clone()),
+                            visibility: Visibility::Visible,
                             ..default()
-                        },));
+                        });
+
+                        parent.spawn((TextBundle {
+                            text: Text::from_section(
+                                format!(
+                                    "Members: {}\nUnit Type: {}\nHealth per Member: {}\nTotal Health: {}\nCurrent Health: {}\nOverworld Speed: {}\nExcavation Speed: {}\nBattle Speed: {}\nVisibility: {}\nDamage: {}",
+                                    unit_data.members, unit_data.unit_type, unit_data.health_per_member, unit_data.total_health, unit_data.current_health, unit_data.overworld_speed, unit_data.excavation_speed, unit_data.battle_speed, unit_data.visibility, unit_data.damage
+                                                                    ),
+                                text_style.clone(),
+                            ),
+                            ..default()
+                        },
+                        UnitPanelUnitStats
+                        ));
+
                         parent
                             .spawn((
                                 ButtonBundle {
