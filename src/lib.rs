@@ -60,6 +60,19 @@ pub struct GameState {
     pub map: NoiseMap,
     pub score: u64,
     pub units: [UnitEntry; 7],
+    pub treasures_found: Vec<Treasure>,
+    pub unit_boons: [TotalBoons; 8],
+}
+
+#[derive(Default)]
+pub struct TotalBoons {
+    health: Vec<(BoonOperation, u8)>,
+    visibility: Vec<(BoonOperation, u8)>,
+    overworld_speed: Vec<(BoonOperation, u8)>,
+    excavation_speed: Vec<(BoonOperation, u8)>,
+    battle_speed: Vec<(BoonOperation, u8)>,
+    damage: Vec<(BoonOperation, u8)>,
+    members: Vec<(BoonOperation, u8)>,
 }
 
 impl Default for GameState {
@@ -67,6 +80,7 @@ impl Default for GameState {
         Self {
             player_tower_location: (0, 0),
             enemy_tower_locations: vec![],
+            treasures_found: vec![],
             map: NoiseMap::default(),
             score: 0,
             units: [
@@ -77,6 +91,16 @@ impl Default for GameState {
                 UnitEntry::Unavailable,
                 UnitEntry::Unavailable,
                 UnitEntry::Unavailable,
+            ],
+            unit_boons: [
+                TotalBoons::default(), // 0 is defense army
+                TotalBoons::default(),
+                TotalBoons::default(),
+                TotalBoons::default(),
+                TotalBoons::default(),
+                TotalBoons::default(),
+                TotalBoons::default(),
+                TotalBoons::default(),
             ],
         }
     }
@@ -131,6 +155,7 @@ impl Default for CursorPos {
 #[derive(Resource, Default)]
 pub struct SelectedUnit {
     pub unit: Option<u8>, // slot
+    pub e: Option<Entity>,
 }
 
 #[derive(Resource)]

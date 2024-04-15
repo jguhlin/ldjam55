@@ -28,13 +28,15 @@ pub struct Unit {
 
     pub total_health: f32,
     pub current_health: f32,
+
+    pub damage: u8,
     // todo: damage, health regen, attack types, etc...
 }
 
 impl Unit {
     pub fn scout() -> Self {
         Self {
-            members: 1,
+            members: 5,
             unit_type: UnitType::Scout,
             health_per_member: 50,
             total_health: 50.0,
@@ -45,14 +47,15 @@ impl Unit {
             battle_speed: 10,
 
             visibility: 8,
+            damage: 4,
         }
     }
     pub fn excavation() -> Self {
         Self {
-            members: 2,
+            members: 7,
             health_per_member: 75,
-            total_health: 150.0,
-            current_health: 150.0,
+            total_health: 7. * 75.0,
+            current_health: 7. * 75.0,
 
             unit_type: UnitType::Excavation,
 
@@ -61,6 +64,7 @@ impl Unit {
             battle_speed: 4,
 
             visibility: 3,
+            damage: 8,
         }
     }
 
@@ -69,10 +73,10 @@ impl Unit {
         Self {
             unit_type: UnitType::Attack,
 
-            members: 3,
+            members: 20,
             health_per_member: 60,
-            total_health: 180.0,
-            current_health: 180.0,
+            total_health: 20. * 60.,
+            current_health: 20. * 60.,
 
             overworld_speed: 10,
 
@@ -80,6 +84,7 @@ impl Unit {
             battle_speed: 10,
 
             visibility: 5,
+            damage: 15,
         }
     }
 }

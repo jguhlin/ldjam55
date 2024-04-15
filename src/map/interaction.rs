@@ -1,6 +1,7 @@
 use bevy::prelude::*;
 use bevy::window::PrimaryWindow;
 use bevy_ecs_tilemap::prelude::*;
+use bevy_mod_picking::prelude::*;
 
 use crate::*;
 
@@ -23,7 +24,7 @@ impl<S: States> Plugin for MapInteractionPlugin<S> {
     fn build(&self, app: &mut App) {
         app.add_event::<CenterCamera>()
             .add_event::<MapClick>()
-            .add_systems(PreUpdate, map_click.run_if(in_state(self.state.clone())))
+            // .add_systems(Update, map_click.run_if(in_state(self.state.clone())))
             .add_systems(PreUpdate, center_camera.run_if(on_event::<CenterCamera>()));
     }
 }
@@ -47,7 +48,7 @@ fn center_camera(
     camera_transform.translation = Vec3::new(x - 500.0 * 32.0, y - 500.0 * 32.0, 10.0);
 }
 
-fn map_click(
+pub fn map_click(
     mut ev_map_click: EventWriter<MapClick>,
     mut cursor: ResMut<CursorPos>,
     tilemap_q: Query<(
@@ -57,7 +58,6 @@ fn map_click(
         &TileStorage,
         &Transform,
     )>,
-    mouse_button_input: Res<ButtonInput<MouseButton>>,
     q_windows: Query<&Window, With<PrimaryWindow>>,
 ) {
     let window = q_windows.single();
@@ -93,10 +93,7 @@ fn map_click(
         if let Some(tile_pos) =
             TilePos::from_world_pos(&cursor_in_map_pos, map_size, grid_size, map_type)
         {
-            if mouse_button_input.just_pressed(MouseButton::Left) {
-                log::info!("Map click at: {:?}", tile_pos);
-                ev_map_click.send(MapClick(cursor_in_map_pos));
-            }
+            ev_map_click.send(MapClick(cursor_in_map_pos));
             cursor.tile_position = tile_pos;
             cursor.tile_position_real = cursor.mouse_position;
             return;

@@ -133,13 +133,16 @@ fn unit_panel(
 }
 
 fn go_to_unit(
+    mut selected_unit: ResMut<SelectedUnit>,
     mut ev_gotounit: EventReader<GoToUnit>,
     mut ev_centercamera: EventWriter<CenterCamera>,
-    q: Query<(&TilePos, &Slot), With<Unit>>,
+    q: Query<(&TilePos, &Slot, Entity), With<Unit>>,
 ) {
     for GoToUnit { slot } in ev_gotounit.read() {
-        for (tile_pos, unit_slot) in q.iter() {
+        for (tile_pos, unit_slot, e) in q.iter() {
             if *slot == unit_slot.slot {
+                selected_unit.unit = Some(*slot);
+                selected_unit.e = Some(e);
                 ev_centercamera.send(CenterCamera { loc: *tile_pos });
             }
         }
@@ -249,6 +252,7 @@ fn add_unit_confirm(
         game_state.units[*slot as usize] = UnitEntry::Summoned(id);
 
         selected_unit.unit = Some(*slot);
+        selected_unit.e = Some(id);
 
         // Update the button
         for (e, button_slot, _button, _image) in button_query.iter_mut() {
@@ -303,7 +307,6 @@ fn add_unit(
                     },
                     ..default()
                 },
-                Pickable::IGNORE,
                 AddUnitMenu,
             ))
             .with_children(|parent| {
@@ -411,6 +414,7 @@ fn interaction(
             Option<&AddExcavationUnitButton>,
             Option<&AddAttackUnitButton>,
             Option<&Slot>,
+            Option<&DigButton>,
         ),
         (Changed<Interaction>, With<Button>),
     >,
@@ -434,6 +438,7 @@ fn interaction(
         add_excavation,
         add_attack,
         slot,
+        dig_button,
     ) in interaction_query.iter_mut()
     {
         match *interaction {
@@ -451,12 +456,14 @@ fn interaction(
         if go_to_tower.is_some() && *interaction == Interaction::Pressed {
             ev_gototower.send(GoToTowerEvent);
             selected_unit.unit = None;
+            selected_unit.e = None;
             style.border = UiRect::all(Val::ZERO);
         }
 
         if add_unit.is_some() && *interaction == Interaction::Pressed {
             ev_addunit.send(AddUnitEvent);
             selected_unit.unit = None;
+            selected_unit.e = None;
             style.border = UiRect::all(Val::ZERO);
         }
 
@@ -468,6 +475,7 @@ fn interaction(
                     unit: UnitType::Scout,
                 });
                 selected_unit.unit = None;
+                selected_unit.e = None;
             }
             style.border = UiRect::all(Val::ZERO);
         }
@@ -480,6 +488,7 @@ fn interaction(
                     unit: UnitType::Excavation,
                 });
                 selected_unit.unit = None;
+                selected_unit.e = None;
             }
             style.border = UiRect::all(Val::ZERO);
         }
@@ -492,6 +501,7 @@ fn interaction(
                     unit: UnitType::Attack,
                 });
                 selected_unit.unit = None;
+                selected_unit.e = None;
             }
             style.border = UiRect::all(Val::ZERO);
         }
@@ -501,6 +511,12 @@ fn interaction(
             selected_unit.unit = Some(slot);
             style.border = UiRect::all(Val::Px(4.0));
             ev_gotounit.send(GoToUnit { slot });
+        }
+
+        if dig_button.as_ref().is_some() && *interaction == Interaction::Pressed {
+            commands
+                .entity(selected_unit.e.unwrap())
+                .insert(Digging::new());
         }
     }
 }
@@ -520,8 +536,8 @@ fn setup_units_bar(mut commands: Commands, assets: Res<GameAssets>, game_state: 
                 },
                 ..default()
             },
-            Pickable::IGNORE,
             Name::from("WholeScreenContainer"),
+            Pickable::IGNORE,
         ))
         .with_children(|parent| {
             // Bottom tool bar

@@ -1,12 +1,12 @@
 use bevy::prelude::*;
 use bevy_ecs_tilemap::prelude::*;
+use bevy_mod_picking::prelude::*;
 use bevy_prng::WyRand;
 use bevy_rand::prelude::*;
 use noise::utils::{NoiseMap, NoiseMapBuilder, PlaneMapBuilder};
 use noise::{Fbm, Perlin, Value};
 use rand::{Rng, SeedableRng};
 use xxhash_rust::xxh3::xxh3_64;
-use bevy_mod_picking::prelude::*;
 
 use crate::*;
 
@@ -163,7 +163,7 @@ fn draw_map(mut commands: Commands, assets: Res<GameAssets>, state: Res<GameStat
                     tilemap_id: TilemapId(tilemap_entity),
                     texture_index: TileTextureIndex(tilemap_idx),
                     ..Default::default()
-                }, PickableBundle::default()))
+                },))
                 .id();
             tile_storage.set(&tile_pos, tile_entity);
         }
@@ -173,20 +173,19 @@ fn draw_map(mut commands: Commands, assets: Res<GameAssets>, state: Res<GameStat
     let grid_size = tile_size.into();
     let map_type = TilemapType::default();
 
-    commands.entity(tilemap_entity).insert((TilemapBundle {
-        grid_size,
-        map_type,
-        size: map_size,
-        storage: tile_storage,
-        texture: TilemapTexture::Single(tile_texture_handle),
-        tile_size,
-        transform: get_tilemap_center_transform(&map_size, &grid_size, &map_type, 0.0),
-        ..Default::default()
-    },
-    PickableBundle::default(),
-    Name::from("GroundMap")
-
-));
+    commands.entity(tilemap_entity).insert((
+        TilemapBundle {
+            grid_size,
+            map_type,
+            size: map_size,
+            storage: tile_storage,
+            texture: TilemapTexture::Single(tile_texture_handle),
+            tile_size,
+            transform: get_tilemap_center_transform(&map_size, &grid_size, &map_type, 0.0),
+            ..Default::default()
+        },
+        Name::from("GroundMap"),
+    ));
 
     let tile_texture_handle = assets.tiles.clone();
     // Spawn the second layer, but it's empty
@@ -234,7 +233,27 @@ fn draw_map(mut commands: Commands, assets: Res<GameAssets>, state: Res<GameStat
         transform: get_tilemap_center_transform(&map_size, &grid_size, &map_type, 2.0),
         ..Default::default()
     },));
+
+    // NodeBundle for handling map clicks
+    commands.spawn((
+        NodeBundle {
+            style: Style {
+                width: Val::Percent(100.0),
+                height: Val::Percent(100.0),
+                align_items: AlignItems::End,
+                ..default()
+            },
+            ..default()
+        },
+        PickableBundle::default(),
+        Name::from("MapClickCheat"),
+        On::<Pointer<Click>>::run(map_click),
+        MapClickCheat,
+    ));
 }
+
+#[derive(Component)]
+pub struct MapClickCheat;
 
 fn create_map(seed: u32) -> NoiseMap {
     let fbm = Fbm::<Value>::new(seed);

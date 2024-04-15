@@ -7,14 +7,15 @@ use strum_macros::EnumIter;
 
 use crate::*;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Treasure {
     pub score: u16,
     pub boons: Vec<Boon>, // 1 to 6, weighted towards 1
     pub summon: Option<SummonType>,
+    pub slot: u8,
 }
 
-#[derive(Debug, EnumIter)]
+#[derive(Debug, EnumIter, Clone)]
 pub enum SummonType {
     FireElemental,
     WaterElemental,
@@ -23,15 +24,14 @@ pub enum SummonType {
     GravityElemental,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Boon {
     pub category: BoonType,
     pub operation: BoonOperation,
     pub value: u8,
-    pub slot: u8,
 }
 
-#[derive(EnumIter, Eq, PartialEq, Debug)]
+#[derive(EnumIter, Eq, PartialEq, Debug, Clone, Copy)]
 pub enum BoonOperation {
     Add,
     Multiply,
@@ -46,7 +46,7 @@ impl std::fmt::Display for BoonOperation {
     }
 }
 
-#[derive(EnumIter, Debug)]
+#[derive(EnumIter, Debug, Clone)]
 pub enum BoonType {
     Health,
     Visibility,
@@ -140,13 +140,11 @@ fn fill_treasures(mut treasures: ResMut<TreasureLocs>, mut rng: ResMut<GlobalEnt
             };
 
             let value = rng.gen_range(min..max);
-            let slot = rng.gen_range(0..8); // Slot 0 is special, it is the defense army
 
             boons.push(Boon {
                 category,
                 operation,
                 value,
-                slot,
             });
         }
 
@@ -160,10 +158,13 @@ fn fill_treasures(mut treasures: ResMut<TreasureLocs>, mut rng: ResMut<GlobalEnt
             None
         };
 
+        let slot = rng.gen_range(0..8); // Slot 0 is special, it is the defense army
+
         treasures_vec.push(Treasure {
             score,
             boons,
             summon,
+            slot,
         });
     }
     treasures.treasures = treasures_vec;

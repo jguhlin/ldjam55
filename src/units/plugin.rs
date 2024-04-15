@@ -8,6 +8,17 @@ pub struct UnitsPlugin<S: States> {
     pub state: S,
 }
 
+#[derive(Component)]
+pub struct Digging {
+    pub progress: f32,
+}
+
+impl Digging {
+    pub fn new() -> Self {
+        Self { progress: 0.0 }
+    }
+}
+
 impl<S: States> Plugin for UnitsPlugin<S> {
     fn build(&self, app: &mut App) {
         app.add_event::<AddUnitComplete>()
@@ -29,19 +40,176 @@ impl<S: States> Plugin for UnitsPlugin<S> {
             .add_systems(
                 Update,
                 units_fog_of_war.run_if(in_state(self.state.clone())),
-            );
+            )
+            .add_systems(Update, dig.run_if(in_state(self.state.clone())));
+    }
+}
+
+pub fn dig(
+    mut commands: Commands,
+    mut query: Query<(Entity, &TilePos, &mut Digging, &mut Unit, &Slot)>,
+    mut gamestate: ResMut<GameState>,
+    mut treasure_locs: ResMut<TreasureLocs>,
+    time: Res<Time>,
+    stuff_q: Query<(&MapStuff, &TileStorage), (Without<MapGround>, Without<MapFogOfWar>)>,
+    mut tile_query: Query<&mut TileVisible>,
+) {
+    let (_, stuff_tile_storage) = stuff_q.single();
+
+    for (e, tile_pos, mut digging, mut unit, slot) in query.iter_mut() {
+        log::info!("Digging... {:?}", digging.progress);
+
+        digging.progress += unit.excavation_speed as f32 * time.delta_seconds();
+        if digging.progress >= 100.0 {
+            commands.entity(e).remove::<Digging>();
+
+            // Add the treasure to the game state
+            treasure_locs
+                .locs
+                .iter()
+                .zip(treasure_locs.treasures.iter())
+                .find(|(pos, _)| **pos == (tile_pos.x, tile_pos.y))
+                .map(|(_, treasure)| {
+                    gamestate.treasures_found.push(treasure.clone());
+                });
+
+            gamestate.score += gamestate.treasures_found.last().unwrap().score as u64;
+
+            if let Some(tile_entity) = stuff_tile_storage.get(&tile_pos) {
+                let mut visibility = tile_query.get_mut(tile_entity).unwrap();
+                visibility.0 = false;
+            }
+
+            // Remove the treasure from the list
+            treasure_locs
+                .locs
+                .retain(|&x| x != (tile_pos.x, tile_pos.y));
+
+            let treasure_found = gamestate.treasures_found.last().unwrap().clone();
+            log::info!("Treasure found: {:?}", treasure_found);
+
+            if !treasure_found.boons.is_empty() {
+                let mut total_boons = &mut gamestate.unit_boons[treasure_found.slot as usize];
+                for boon in &treasure_found.boons {
+                    match boon.category {
+                        BoonType::Health => {
+                            total_boons.health.push((boon.operation, boon.value));
+                        }
+                        BoonType::Visibility => {
+                            total_boons.visibility.push((boon.operation, boon.value));
+                        }
+                        BoonType::OverworldSpeed => {
+                            total_boons
+                                .overworld_speed
+                                .push((boon.operation, boon.value));
+                        }
+                        BoonType::ExcavationSpeed => {
+                            total_boons
+                                .excavation_speed
+                                .push((boon.operation, boon.value));
+                        }
+                        BoonType::BattleSpeed => {
+                            total_boons.battle_speed.push((boon.operation, boon.value));
+                        }
+                        BoonType::Damage => {
+                            total_boons.damage.push((boon.operation, boon.value));
+                        }
+                        BoonType::Members => {
+                            total_boons.members.push((boon.operation, boon.value));
+                        }
+                    }
+                }
+            }
+
+            // Do we have a spawned unit in this slot, then apply the boons
+                if slot.slot == treasure_found.slot {
+                    let total_boons = &gamestate.unit_boons[slot.slot as usize];
+
+                    if !treasure_found.boons.is_empty() {
+                        for boon in &treasure_found.boons {
+                            match boon.category {
+                                BoonType::Health => {
+                                    let previous_total_health = unit.total_health;
+                                    if boon.operation == BoonOperation::Add {
+                                        unit.health_per_member += boon.value;
+                                        unit.total_health =
+                                            unit.members as f32 * unit.health_per_member as f32;
+                                    } else {
+                                        unit.health_per_member = (unit.health_per_member as f32
+                                            * boon.value as f32)
+                                            as u8;
+                                        unit.total_health =
+                                            unit.members as f32 * unit.health_per_member as f32;
+                                        unit.current_health = unit.total_health;
+                                    }
+                                    let difference = unit.total_health - previous_total_health;
+                                    unit.current_health += difference;
+                                }
+                                BoonType::Visibility => {
+                                    if boon.operation == BoonOperation::Add {
+                                        unit.visibility += boon.value as u8;
+                                    } else {
+                                        unit.visibility =
+                                            (unit.visibility as i8 * boon.value as i8) as u8;
+                                    }
+                                }
+                                BoonType::OverworldSpeed => {
+                                    if boon.operation == BoonOperation::Add {
+                                        unit.overworld_speed += boon.value as u8;
+                                    } else {
+                                        unit.overworld_speed =
+                                            (unit.overworld_speed as i8 * boon.value as i8) as u8;
+                                    }
+                                }
+                                BoonType::ExcavationSpeed => {
+                                    if boon.operation == BoonOperation::Add {
+                                        unit.excavation_speed += boon.value as u8;
+                                    } else {
+                                        unit.excavation_speed =
+                                            (unit.excavation_speed as i8 * boon.value as i8) as u8;
+                                    }
+                                }
+                                BoonType::BattleSpeed => {
+                                    if boon.operation == BoonOperation::Add {
+                                        unit.battle_speed += boon.value as u8;
+                                    } else {
+                                        unit.battle_speed =
+                                            (unit.battle_speed as i8 * boon.value as i8) as u8;
+                                    }
+                                }
+                                BoonType::Damage => {
+                                    if boon.operation == BoonOperation::Add {
+                                        unit.damage += boon.value as u8;
+                                    } else {
+                                        unit.damage = (unit.damage as i8 * boon.value as i8) as u8;
+                                    }
+                                }
+                                BoonType::Members => {
+                                    if boon.operation == BoonOperation::Add {
+                                        unit.members += boon.value as u8;
+                                    } else {
+                                        unit.members =
+                                            (unit.members as i8 * boon.value as i8) as u8;
+                                    }
+                                    // Trigger spawning more little guys
+                                    commands.entity(e).insert(UnitUninitialized);
+                                }
+                            }
+                        }
+                    }
+                }
+        }
     }
 }
 
 fn unit_intersections(
     mut commands: Commands,
-    query: Query<(Entity, &TilePos, &Unit)>,
+    query: Query<(Entity, &TilePos, &Unit, Option<&Digging>)>,
     treasures: Res<TreasureLocs>,
     // todo add other enemies / towers / etc
 ) {
-    for (unit_entity, unit_tile_pos, _unit) in query.iter() {
-        if treasures.locs.contains(&(unit_tile_pos.x, unit_tile_pos.y)) {
-            log::info!("Unit found treasure");
+    for (unit_entity, unit_tile_pos, _unit, digging) in query.iter() {
+        if treasures.locs.contains(&(unit_tile_pos.x, unit_tile_pos.y)) && digging.is_none() {
             commands.entity(unit_entity).insert(CanDig);
         } else {
             commands.entity(unit_entity).remove::<CanDig>();
@@ -82,7 +250,6 @@ fn units_fog_of_war(
     fog_q: Query<(&MapFogOfWar, &TileStorage), Without<MapStuff>>,
     mut tile_query: Query<&mut TileVisible>,
 ) {
-    // Clear out a radius of 6 around moving units
     // todo make circular
     let (_map_fog_of_war, fog_tile_storage) = fog_q.single();
 
@@ -161,21 +328,39 @@ fn move_units(
     }
 }
 
-fn prevent_collision(mut query: Query<(&mut Transform, &UnitVisual)>) {
+fn prevent_collision(mut query: Query<(&mut Transform, &UnitVisual, Entity)>) {
     let mut combinations = query.iter_combinations_mut();
     while let Some([a1, mut a2]) = combinations.fetch_next() {
         // Make a buffer of at least 6 between each, width wise
         // and 14 height wise
         // Move at a diagonal
 
-        // If a2 is within 6 of a1, move a2 to the right
-        if (a1.0.translation.x - a2.0.translation.x).abs() < 6.0 {
-            a2.0.translation.x += 0.1;
+        let bits: [u8; 8] = unsafe { std::mem::transmute(a1.2.to_bits()) };
+
+        let hash_a = xxh3_64(&bits[..]);
+
+        let bits: [u8; 8] = unsafe { std::mem::transmute(a2.2.to_bits()) };
+
+        let hash_b = xxh3_64(&bits[..]);
+
+        // If a2 is within 6 of a1, move a2
+        if (a1.0.translation.x - a2.0.translation.x).abs() < 7.0 {
+            let mut move_distance = 0.1;
+
+            if hash_a > hash_b {
+                move_distance = -0.1;
+            }
+
+            a2.0.translation.x += move_distance;
         }
 
-        // If a2 is within 14 of a1, move a2 down
-        if (a1.0.translation.y - a2.0.translation.y).abs() < 14.0 {
-            a2.0.translation.y -= 0.1;
+        if (a1.0.translation.y - a2.0.translation.y).abs() < 17.0 {
+            let mut move_distance = 0.1;
+            if hash_a > hash_b {
+                move_distance = -0.1;
+            }
+
+            a2.0.translation.y += move_distance;
         }
     }
 }
@@ -214,16 +399,20 @@ fn jitter_units(
 fn spawn_sprites(
     mut commands: Commands,
     assets: Res<GameAssets>,
-    query: Query<(&Unit, Entity), (With<UnitUninitialized>, Without<Children>)>,
+    query: Query<(&Unit, Entity, Option<&Children>), With<UnitUninitialized>>,
 ) {
-    for (unit, entity) in query.iter() {
-        log::info!("Spawning unit");
+    for (unit, entity, children) in query.iter() {
         let mut transform = Transform::from_translation(Vec3::ZERO);
         commands.entity(entity).remove::<UnitUninitialized>();
-        log::info!("Unit members: {}", unit.members);
+
+        let cur_children_count = match children {
+            Some(children) => children.len(),
+            None => 0,
+        };
+
         // Add to children
         commands.entity(entity).with_children(|p| {
-            for _ in 0..unit.members {
+            for _ in 0..unit.members as usize - cur_children_count {
                 log::info!("Spawning unit member");
                 // Stagger the kids a little
                 transform.translation.x += 0.5;
