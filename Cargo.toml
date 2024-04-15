@@ -48,7 +48,6 @@ bevy_ecs_tilemap = { git = "https://github.com/StarArawn/bevy_ecs_tilemap" }
 bevy_egui = {version = "0.26", default-features = false, features = ["default_fonts", "render"]}
 bevy-inspector-egui = "0.23"
 egui_plot = "0.27"
-bevy_mod_picking = "0.18"
 bevy_rand = "0.5"
 bevy_prng = { version = "0.5", features = ["wyrand"] }
 rand = "0.8.3"
@@ -64,6 +63,7 @@ rand_distr = "0.4.3"
 rand_core = "0.6.4"
 nohash = "0.2.0"
 noise = "0.9.0"
+bevy_mod_picking = { version = "0.18", features = ["backend_sprite"] }
 
 log = "0.4"
 flexi_logger = "0.28"

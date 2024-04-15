@@ -13,20 +13,39 @@ impl<S: States> Plugin for UnitsPlugin<S> {
         app.add_event::<AddUnitComplete>()
             // .add_systems(OnEnter(self.state.clone()), setup_units_bar)
             .add_systems(
-                PostUpdate,
+                PreUpdate,
                 spawn_sprites.run_if(on_event::<AddUnitComplete>()),
             )
             .add_systems(
                 PreUpdate,
-                (prevent_collision, jitter_units).run_if(in_state(self.state.clone())),
+                (prevent_collision).run_if(in_state(self.state.clone())),
             )
             .add_systems(Update, set_direction.run_if(in_state(self.state.clone())))
-            .add_systems(Update, move_units.run_if(in_state(self.state.clone())))
+            .add_systems(
+                Update,
+                (unit_intersections, move_units).run_if(in_state(self.state.clone())),
+            )
             .add_systems(Update, update_unit_pos.run_if(in_state(self.state.clone())))
             .add_systems(
                 Update,
                 units_fog_of_war.run_if(in_state(self.state.clone())),
             );
+    }
+}
+
+fn unit_intersections(
+    mut commands: Commands,
+    query: Query<(Entity, &TilePos, &Unit)>,
+    treasures: Res<TreasureLocs>,
+    // todo add other enemies / towers / etc
+) {
+    for (unit_entity, unit_tile_pos, _unit) in query.iter() {
+        if treasures.locs.contains(&(unit_tile_pos.x, unit_tile_pos.y)) {
+            log::info!("Unit found treasure");
+            commands.entity(unit_entity).insert(CanDig);
+        } else {
+            commands.entity(unit_entity).remove::<CanDig>();
+        }
     }
 }
 
@@ -110,6 +129,7 @@ fn set_direction(
         commands.entity(e).insert(UnitDirection {
             direction: direction,
             destination: cursor_pos.tile_position_real,
+            destination_in_tile_pos: cursor_pos.tile_position,
         });
     }
 }
@@ -118,14 +138,15 @@ pub const MOVEMENT_SPEED_SCALE: f32 = 20.0;
 
 fn move_units(
     mut commands: Commands,
-    mut query: Query<(Entity, &mut Transform, &Unit, &mut UnitDirection)>,
+    mut query: Query<(Entity, &mut Transform, &Unit, &TilePos, &mut UnitDirection)>,
     time: Res<Time>,
 ) {
-    for (e, mut transform, unit, mut unit_direction) in query.iter_mut() {
+    for (e, mut transform, unit, tilepos, mut unit_direction) in query.iter_mut() {
         let direction = unit_direction.destination - transform.translation.xy();
         unit_direction.direction = direction.normalize();
 
-        if transform.translation.xy() == unit_direction.destination {
+        if *tilepos == unit_direction.destination_in_tile_pos {
+            log::info!("Unit has reached destination");
             commands.entity(e).remove::<UnitDirection>();
         } else {
             transform.translation.x += unit_direction.direction.x
@@ -193,18 +214,20 @@ fn jitter_units(
 fn spawn_sprites(
     mut commands: Commands,
     assets: Res<GameAssets>,
-    mut query: Query<(&mut Unit, Entity), With<UnitUninitialized>>,
+    query: Query<(&Unit, Entity), (With<UnitUninitialized>, Without<Children>)>,
 ) {
-    for (mut unit, entity) in query.iter_mut() {
+    for (unit, entity) in query.iter() {
         log::info!("Spawning unit");
         let mut transform = Transform::from_translation(Vec3::ZERO);
         commands.entity(entity).remove::<UnitUninitialized>();
+        log::info!("Unit members: {}", unit.members);
         // Add to children
         commands.entity(entity).with_children(|p| {
             for _ in 0..unit.members {
+                log::info!("Spawning unit member");
                 // Stagger the kids a little
                 transform.translation.x += 0.5;
-                transform.translation.y += 0.8;
+                transform.translation.y += 0.1;
                 p.spawn((
                     SpriteSheetBundle {
                         texture: assets.tiles.clone(),

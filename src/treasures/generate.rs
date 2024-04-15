@@ -159,8 +159,12 @@ fn fill_treasures(mut treasures: ResMut<TreasureLocs>, mut rng: ResMut<GlobalEnt
         } else {
             None
         };
-        
-        treasures_vec.push(Treasure { score, boons, summon });
+
+        treasures_vec.push(Treasure {
+            score,
+            boons,
+            summon,
+        });
     }
     treasures.treasures = treasures_vec;
 }

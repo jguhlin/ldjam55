@@ -1,6 +1,10 @@
 use bevy::prelude::{Component, Deref, DerefMut, Entity, Handle, Image, Vec2};
+use bevy_ecs_tilemap::prelude::TilePos;
 
 use crate::GameAssets;
+
+#[derive(Component)]
+pub struct CanDig;
 
 #[derive(Component)]
 pub struct UnitUninitialized;
@@ -111,4 +115,5 @@ pub struct UnitVisual;
 pub struct UnitDirection {
     pub direction: Vec2,
     pub destination: Vec2,
+    pub destination_in_tile_pos: TilePos,
 }

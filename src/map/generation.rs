@@ -6,6 +6,7 @@ use noise::utils::{NoiseMap, NoiseMapBuilder, PlaneMapBuilder};
 use noise::{Fbm, Perlin, Value};
 use rand::{Rng, SeedableRng};
 use xxhash_rust::xxh3::xxh3_64;
+use bevy_mod_picking::prelude::*;
 
 use crate::*;
 
@@ -157,12 +158,12 @@ fn draw_map(mut commands: Commands, assets: Res<GameAssets>, state: Res<GameStat
             let tilemap_idx = get_index(val);
             let tile_pos = TilePos { x, y };
             let tile_entity = commands
-                .spawn(TileBundle {
+                .spawn((TileBundle {
                     position: tile_pos,
                     tilemap_id: TilemapId(tilemap_entity),
                     texture_index: TileTextureIndex(tilemap_idx),
                     ..Default::default()
-                })
+                }, PickableBundle::default()))
                 .id();
             tile_storage.set(&tile_pos, tile_entity);
         }
@@ -181,7 +182,11 @@ fn draw_map(mut commands: Commands, assets: Res<GameAssets>, state: Res<GameStat
         tile_size,
         transform: get_tilemap_center_transform(&map_size, &grid_size, &map_type, 0.0),
         ..Default::default()
-    },));
+    },
+    PickableBundle::default(),
+    Name::from("GroundMap")
+
+));
 
     let tile_texture_handle = assets.tiles.clone();
     // Spawn the second layer, but it's empty

@@ -1,6 +1,8 @@
 use bevy::prelude::*;
 use bevy::ui::FocusPolicy;
 use bevy_ecs_tilemap::prelude::*;
+use bevy_egui::egui::Ui;
+use bevy_mod_picking::prelude::*;
 
 use crate::*;
 
@@ -20,10 +22,113 @@ impl<S: States> Plugin for UnitsUiPlugin<S> {
             .add_systems(Update, interaction.run_if(in_state(self.state.clone())))
             .add_systems(Update, add_unit.run_if(on_event::<AddUnitEvent>()))
             .add_systems(
-                Update,
+                PostUpdate,
                 add_unit_confirm.run_if(on_event::<AddUnitConfirm>()),
             )
-            .add_systems(Update, go_to_unit.run_if(on_event::<GoToUnit>()));
+            .add_systems(Update, go_to_unit.run_if(on_event::<GoToUnit>()))
+            .add_systems(Update, unit_panel.run_if(in_state(self.state.clone())));
+    }
+}
+
+#[derive(Component)]
+pub struct UnitInfoPanel;
+
+#[derive(Component)]
+pub struct DigButton;
+
+fn unit_panel(
+    mut commands: Commands,
+    selected_unit: Res<SelectedUnit>,
+    game_state: Res<GameState>,
+    query: Query<(Entity, &UnitInfoPanel)>,
+    unit_query: Query<(Entity, &Unit, &Slot, &TilePos, Option<&CanDig>)>,
+    assets: Res<GameAssets>,
+    mut dig_button_query: Query<&mut Visibility, With<DigButton>>,
+) {
+    // Despawn if nothing selected
+    if selected_unit.unit.is_none() {
+        for (e, _) in query.iter() {
+            commands.entity(e).despawn_recursive();
+        }
+        return;
+    }
+
+    // Get unit info
+    let unit = selected_unit.unit.unwrap();
+
+    if !dig_button_query.is_empty() {
+        let mut dig_button_visibility = dig_button_query.single_mut();
+
+        for (e, u, slot, tilepos, candig) in unit_query.iter() {
+            if slot.slot == unit {
+                if candig.is_some() {
+                    *dig_button_visibility = Visibility::Visible;
+                } else {
+                    *dig_button_visibility = Visibility::Hidden;
+                }
+            }
+        }
+    }
+
+    // Create panel?
+    if query.is_empty() {
+        let text_style = TextStyle {
+            font_size: 26.0,
+            color: Color::rgba(1., 1., 1., 1.0).into(),
+            font: assets.font.clone(),
+            ..default()
+        };
+
+        commands
+            .spawn((
+                NodeBundle {
+                    style: Style {
+                        width: Val::Percent(100.0),
+                        height: Val::Percent(100.0),
+                        align_items: AlignItems::End,
+                        ..default()
+                    },
+                    ..default()
+                },
+                UnitInfoPanel,
+                Pickable::IGNORE,
+            ))
+            .with_children(|parent| {
+                parent
+                    .spawn(NodeBundle {
+                        style: Style {
+                            flex_direction: FlexDirection::Column,
+                            align_items: AlignItems::Center,
+                            width: Val::Percent(20.0),
+                            height: Val::Percent(30.0),
+                            bottom: Val::Percent(50.0),
+                            padding: UiRect::all(Val::Px(10.0)),
+                            ..default()
+                        },
+                        background_color: Color::rgba(0.1, 0.1, 0.1, 1.0).into(),
+                        ..default()
+                    })
+                    .with_children(|parent| {
+                        parent.spawn((TextBundle {
+                            text: Text::from_section("Unit Info", text_style.clone()),
+                            ..default()
+                        },));
+                        parent
+                            .spawn((
+                                ButtonBundle {
+                                    visibility: Visibility::Hidden,
+                                    ..default()
+                                },
+                                DigButton,
+                            ))
+                            .with_children(|parent| {
+                                parent.spawn((TextBundle {
+                                    text: Text::from_section("Dig", text_style.clone()),
+                                    ..default()
+                                },));
+                            });
+                    });
+            });
     }
 }
 
@@ -198,6 +303,7 @@ fn add_unit(
                     },
                     ..default()
                 },
+                Pickable::IGNORE,
                 AddUnitMenu,
             ))
             .with_children(|parent| {
@@ -414,6 +520,7 @@ fn setup_units_bar(mut commands: Commands, assets: Res<GameAssets>, game_state: 
                 },
                 ..default()
             },
+            Pickable::IGNORE,
             Name::from("WholeScreenContainer"),
         ))
         .with_children(|parent| {

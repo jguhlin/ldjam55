@@ -105,7 +105,7 @@ pub struct Icons {
 
 impl Default for GameConfig {
     fn default() -> Self {
-        Self { seed: 564139019 }
+        Self { seed: 442 }
     }
 }
 

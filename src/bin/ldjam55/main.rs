@@ -42,6 +42,8 @@ fn main() {
                 })
                 .set(ImagePlugin::default_nearest()),
         )
+        .add_plugins(DefaultPickingPlugins)
+        .insert_resource(DebugPickingMode::Normal)
         .add_plugins(EntropyPlugin::<WyRand>::default())
         .add_plugins(TilemapPlugin)
         // States
